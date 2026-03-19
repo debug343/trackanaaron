@@ -253,6 +253,17 @@ export default function AaronTracker() {
   const [subStatus, setSubStatus] = useState("");
   const [subLoading, setSubLoading] = useState(false);
 
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentName, setCommentName] = useState("");
+  const [commentText, setCommentText] = useState("");
+  const [commentVerify, setCommentVerify] = useState("");
+  const [commentFormLoadedAt] = useState(() => Date.now());
+  const [commentWebsite, setCommentWebsite] = useState("");
+  const [commentStatus, setCommentStatus] = useState("");
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -260,6 +271,7 @@ export default function AaronTracker() {
     } catch {}
     fetchJournal();
     fetchLiveData();
+    fetchComments();
   }, []);
 
   async function fetchLiveData() {
@@ -405,6 +417,90 @@ export default function AaronTracker() {
     setSendingUpdate(false);
   }
 
+  async function fetchComments() {
+    setCommentsLoading(true);
+    try {
+      const res = await fetch("/api/comments");
+      const data = await res.json();
+      setComments(data.comments || []);
+    } catch {}
+    setCommentsLoading(false);
+  }
+
+  async function submitComment(e) {
+    e.preventDefault();
+    setCommentStatus("sending");
+    try {
+      const res = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: commentName.trim(),
+          text: commentText.trim(),
+          verifyWord: commentVerify.trim(),
+          formLoadedAt: commentFormLoadedAt,
+          website: commentWebsite,
+        }),
+      });
+      if (res.ok) {
+        setCommentStatus("sent");
+        setCommentName(""); setCommentText(""); setCommentVerify("");
+      } else {
+        const d = await res.json();
+        setCommentStatus(d.error || "Could not submit. Please try again.");
+      }
+    } catch { setCommentStatus("Network error."); }
+  }
+
+  async function approveComment(id) {
+    await fetch("/api/comments", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, password: adminPwd }),
+    });
+    fetchComments();
+    fetchAllComments();
+  }
+
+  async function deleteComment(id) {
+    await fetch("/api/comments", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, password: adminPwd }),
+    });
+    fetchComments();
+    fetchAllComments();
+  }
+
+  const [allComments, setAllComments] = useState([]);
+  async function fetchAllComments() {
+    if (!adminPwd) return;
+    try {
+      const res = await fetch(`/api/comments?all=1&password=${encodeURIComponent(adminPwd)}`);
+      const data = await res.json();
+      setAllComments(data.comments || []);
+    } catch {}
+  }
+
+  async function handleShare() {
+    const shareData = {
+      title: `${ATHLETE_NAME} — ${RACE_NAME}`,
+      text: `Aaron Rabinowitz is racing 170.8 miles through Canada's Arctic in the 6633 Northern Lights Ultra — and raising money for South Sudan Medical Relief. Follow his live progress here:`,
+      url: "https://trackanaaron.vercel.app",
+    };
+    if (navigator.share) {
+      try { await navigator.share(shareData); } catch {}
+    } else {
+      try {
+        await navigator.clipboard.writeText("https://trackanaaron.vercel.app");
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2500);
+      } catch {
+        window.prompt("Copy this link:", "https://trackanaaron.vercel.app");
+      }
+    }
+  }
+
   async function submitSubscribe(e) {
     e.preventDefault();
     setSubLoading(true);
@@ -434,17 +530,10 @@ export default function AaronTracker() {
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "8px" }}>Live Race Tracker</div>
             <h1 style={{ margin: "0 0 6px", fontSize: "clamp(26px, 5vw, 42px)", fontWeight: "normal", color: "#fff" }}>{ATHLETE_NAME}</h1>
-            <div style={{ color: "#7a9cc8", fontSize: "14px", marginBottom: "16px" }}>{RACE_NAME} · 170.8 mi · Arctic Canada · March 18–22, 2026</div>
-            <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
-              {!isAdmin ? (
-                <>
-                  <input type="password" value={adminPwd} onChange={(e) => setAdminPwd(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setIsAdmin(true)} placeholder="Admin" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a6a8a", padding: "10px 12px", fontSize: "16px", width: "90px", fontFamily: "inherit" }} />
-                  <button onClick={() => setIsAdmin(true)} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#2a4a6a", padding: "10px 14px", fontSize: "16px", cursor: "pointer", minHeight: "44px" }}>🔒</button>
-                </>
-              ) : (
-                <div style={{ fontSize: "11px", color: "#00c896", letterSpacing: "2px" }}>✓ ADMIN</div>
-              )}
-            </div>
+            <div style={{ color: "#7a9cc8", fontSize: "14px", marginBottom: "20px" }}>{RACE_NAME} · 170.8 mi · Arctic Canada · March 18–22, 2026</div>
+            <button onClick={handleShare} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #1e3a6e", borderRadius: "20px", color: shareCopied ? "#00c896" : "#7a9cc8", padding: "9px 20px", fontSize: "13px", cursor: "pointer", letterSpacing: "1px", fontFamily: "inherit" }}>
+              {shareCopied ? "✓ Link Copied!" : "⎘ Share Aaron's Race"}
+            </button>
           </div>
         </div>
       </div>
@@ -756,6 +845,86 @@ export default function AaronTracker() {
 
         </div>
 
+        {/* ── COMMENTS ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Leave a Message for Aaron</div>
+          <p style={{ color: "#4a7aaa", fontSize: "14px", margin: "0 0 20px", lineHeight: "1.6" }}>Cheer him on from wherever you are — messages are reviewed before they appear.</p>
+
+          {commentStatus === "sent" ? (
+            <div style={{ ...card, marginBottom: "24px", textAlign: "center", padding: "28px", color: "#00c896", fontSize: "15px" }}>
+              ✓ Thanks! Your message is under review and will appear shortly.
+            </div>
+          ) : (
+            <form onSubmit={submitComment} style={{ ...card, marginBottom: "24px" }}>
+              {/* Honeypot — hidden from real users, visible to bots */}
+              <div style={{ position: "absolute", left: "-9999px", height: "1px", overflow: "hidden" }}>
+                <input tabIndex={-1} autoComplete="off" value={commentWebsite} onChange={(e) => setCommentWebsite(e.target.value)} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <input value={commentName} onChange={(e) => setCommentName(e.target.value)} placeholder="Your name" required maxLength={80} style={inputStyle} />
+                <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Your message for Aaron..." required maxLength={1000} rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: "1.7", width: "100%", boxSizing: "border-box" }} />
+                <div>
+                  <div style={{ fontSize: "13px", color: "#4a7aaa", marginBottom: "8px" }}>Type the word <strong style={{ color: "#7aaacc" }}>arctic</strong> to confirm you're human:</div>
+                  <input value={commentVerify} onChange={(e) => setCommentVerify(e.target.value)} placeholder="arctic" required style={{ ...inputStyle, width: "160px" }} />
+                </div>
+                {commentStatus && commentStatus !== "sending" && (
+                  <div style={{ color: "#ff8080", fontSize: "13px" }}>{commentStatus}</div>
+                )}
+                <button type="submit" disabled={commentStatus === "sending"} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 22px", fontSize: "15px", cursor: "pointer", minHeight: "48px", alignSelf: "flex-start" }}>
+                  {commentStatus === "sending" ? "Sending..." : "Post Message"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Admin pending approvals */}
+          {isAdmin && (() => {
+            const pending = allComments.filter((c) => !c.approved);
+            if (!pending.length) return null;
+            return (
+              <div style={{ marginBottom: "20px" }}>
+                <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#ff8080", textTransform: "uppercase", marginBottom: "10px" }}>Pending ({pending.length})</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {pending.map((c) => (
+                    <div key={c.id} style={{ ...card, border: "1px solid #3a2a1a" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
+                        <div style={{ fontWeight: "600", color: "#fff", fontSize: "14px" }}>{c.name}</div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button onClick={() => approveComment(c.id)} style={{ background: "none", border: "1px solid #1a4a2a", borderRadius: "5px", color: "#00c896", cursor: "pointer", fontSize: "12px", padding: "4px 10px" }}>Approve</button>
+                          <button onClick={() => deleteComment(c.id)} style={{ background: "none", border: "1px solid #2a1a1a", borderRadius: "5px", color: "#ff8080", cursor: "pointer", fontSize: "12px", padding: "4px 10px" }}>Delete</button>
+                        </div>
+                      </div>
+                      <p style={{ margin: 0, color: "#8a9abf", fontSize: "13px", lineHeight: "1.7" }}>{c.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {commentsLoading && <div style={{ color: "#4a6a8a", fontSize: "14px" }}>Loading...</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {comments.map((c) => (
+              <div key={c.id} style={{ ...card, position: "relative" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px", gap: "12px" }}>
+                  <div style={{ fontWeight: "600", color: "#fff", fontSize: "15px" }}>{c.name}</div>
+                  <div style={{ fontSize: "11px", color: "#4a6a8a", flexShrink: 0 }}>{new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                </div>
+                <p style={{ margin: 0, color: "#c8d4f0", fontSize: "14px", lineHeight: "1.8" }}>{c.text}</p>
+                {isAdmin && (
+                  <button onClick={() => deleteComment(c.id)} style={{ position: "absolute", top: "12px", right: "12px", background: "none", border: "none", color: "#4a4a6a", cursor: "pointer", fontSize: "18px", padding: "2px 6px" }}>×</button>
+                )}
+              </div>
+            ))}
+            {!commentsLoading && comments.length === 0 && (
+              <div style={{ ...card, textAlign: "center", padding: "32px 20px", color: "#2a4a6a" }}>
+                <div style={{ fontSize: "28px", marginBottom: "8px" }}>💬</div>
+                <div>No messages yet — be the first to cheer Aaron on!</div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* ── FACEBOOK ── */}
         <div style={{ marginBottom: "40px" }}>
           <div style={{ ...sectionTitle, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
@@ -793,6 +962,31 @@ export default function AaronTracker() {
         </div>
 
       </div>
+
+      {/* ── ADMIN LOGIN ── hidden at the bottom for staff use */}
+      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 20px 40px", textAlign: "center" }}>
+        <div style={{ borderTop: "1px solid #0d1520", paddingTop: "24px" }}>
+          {!isAdmin ? (
+            <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+              <input
+                type="password"
+                value={adminPwd}
+                onChange={(e) => setAdminPwd(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { setIsAdmin(true); fetchAllComments(); } }}
+                placeholder="·····"
+                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #0d1520", borderRadius: "6px", color: "#1a2a3a", padding: "10px 12px", fontSize: "16px", width: "80px", fontFamily: "inherit" }}
+              />
+              <button
+                onClick={() => { setIsAdmin(true); fetchAllComments(); }}
+                style={{ background: "none", border: "1px solid #0d1520", borderRadius: "6px", color: "#1a2a3a", padding: "10px 14px", fontSize: "14px", cursor: "pointer", minHeight: "44px" }}
+              >🔒</button>
+            </div>
+          ) : (
+            <div style={{ fontSize: "11px", color: "#2a4a3a", letterSpacing: "2px" }}>✓ admin</div>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }
