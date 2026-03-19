@@ -1,17 +1,19 @@
 import { useState, useEffect } from "react";
 
-const ATHLETE_URL = "https://trackleaders.com/6633ultra26i.php?name=Aaron_Rabinowitz";
 const ATHLETE_NAME = "Aaron Rabinowitz";
 const RACE_NAME = "6633 Northern Lights Ultra";
 const TOTAL_MILES = 170.8;
+const DONATE_URL = "https://africanmissionhealthcare.org/donation/ssmr/?utm_source=ig&utm_medium=social&utm_content=link_in_bio";
+const RACE_INFO_URL = "https://www.6633ultra.com/pages/northern-lights-ultra-race-details";
+const MAP_URL = "https://trackleaders.com/6633ultra26f.php";
 
 const CHECKPOINTS = [
-  { name: "Start", mile: 0 },
-  { name: "Camp 1 – McPherson Community Hall", mile: 30.2 },
-  { name: "Camp 2 (Approx)", mile: 64.3 },
-  { name: "Camp 3 – Aklavik Moose Kerr School", mile: 98.1 },
-  { name: "Camp 4 / Marathon Start", mile: 144.7 },
-  { name: "Finish Line", mile: 170.8 },
+  { name: "Start – Eagle Plains", mile: 0, day: "Day 1 · Mar 17" },
+  { name: "Fort McPherson", mile: 30, day: "Day 2 · Mar 18" },
+  { name: "Peel River / Camp 2", mile: 64, day: "Day 3 · Mar 19" },
+  { name: "Aklavik / Camp 3", mile: 92, day: "Day 4 · Mar 20" },
+  { name: "Camp 4 – Longest Stage End", mile: 154, day: "Day 5 · Mar 21" },
+  { name: "Finish – Inuvik", mile: 170.8, day: "Day 5 · Mar 21" },
 ];
 
 const STORAGE_KEY = "aaron_tracker_snapshots";
@@ -25,8 +27,7 @@ function getCheckpoint(mile) {
   }
   const next = CHECKPOINTS[CHECKPOINTS.indexOf(reached) + 1];
   if (!next) return `✅ ${reached.name}`;
-  const dist = (next.mile - mile).toFixed(1);
-  return `${reached.name} → ${next.name} (${dist} mi to next)`;
+  return `${reached.name} → ${next.name} (${(next.mile - mile).toFixed(1)} mi to next)`;
 }
 
 function parseAthleteData(html) {
@@ -65,6 +66,125 @@ function progressPct(mile) {
   return Math.min(100, (mile / TOTAL_MILES) * 100).toFixed(1);
 }
 
+// Elevation in feet, digitised from trackleaders 6633ultra26f profile
+const ELEV_POINTS = [
+  [0,70],[2,35],[4,22],[6,20],[10,21],[15,22],[20,24],[25,27],[30,35],
+  [33,35],[36,33],[38,28],[40,20],[42,24],[44,28],[46,14],[48,26],
+  [50,12],[52,24],[54,10],[56,22],[58,8],[60,15],[62,8],[64,6],
+  [70,7],[80,5],[90,7],[92,7],[95,10],[99,13],[100,5],[101,50],
+  [110,50],[120,50],[128,50],[130,50],[131,10],[133,8],[135,40],
+  [140,40],[145,38],[148,35],[150,25],[152,65],[153.5,55],[155,68],
+  [157,28],[162,22],[166,20],[170.8,20],
+];
+
+const STAGES = [
+  { n: 1, start: 0,   end: 30,    label: "Eagle Plains → Ft McPherson" },
+  { n: 2, start: 30,  end: 64,    label: "Ft McPherson → Peel River" },
+  { n: 3, start: 64,  end: 92,    label: "Peel River → Aklavik" },
+  { n: 4, start: 92,  end: 154,   label: "Aklavik → Camp 4" },
+  { n: 5, start: 154, end: 170.8, label: "Camp 4 → Inuvik" },
+];
+
+const ELEV_CHECKPOINTS = [
+  { name: "Eagle Plains", mile: 0 },
+  { name: "Ft McPherson", mile: 30 },
+  { name: "Peel River", mile: 64 },
+  { name: "Aklavik", mile: 92 },
+  { name: "Camp 4", mile: 154 },
+  { name: "Inuvik", mile: 170.8 },
+];
+
+function interpolateElev(mile) {
+  for (let i = 0; i < ELEV_POINTS.length - 1; i++) {
+    const [m0, e0] = ELEV_POINTS[i], [m1, e1] = ELEV_POINTS[i + 1];
+    if (mile >= m0 && mile <= m1) return e0 + ((mile - m0) / (m1 - m0)) * (e1 - e0);
+  }
+  return null;
+}
+
+function ElevationProfile({ currentMile }) {
+  const W = 860, H = 210, padL = 34, padR = 10, padT = 46, padB = 48;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const maxElev = 85;
+  const toX = (m) => padL + (m / 170.8) * plotW;
+  const toY = (e) => padT + plotH - (e / maxElev) * plotH;
+  const base = padT + plotH;
+
+  const linePts = ELEV_POINTS.map(([m, e]) => `${toX(m).toFixed(1)},${toY(e).toFixed(1)}`).join(" ");
+  const areaD = `M ${toX(0)},${base} ` +
+    ELEV_POINTS.map(([m, e]) => `L ${toX(m).toFixed(1)},${toY(e).toFixed(1)}`).join(" ") +
+    ` L ${toX(170.8)},${base} Z`;
+
+  const curElev = currentMile !== null ? interpolateElev(currentMile) : null;
+  const stageBg = ["rgba(26,95,200,0.07)", "rgba(0,200,150,0.06)", "rgba(100,50,200,0.06)", "rgba(26,95,200,0.07)", "rgba(0,200,150,0.06)"];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+      <defs>
+        <linearGradient id="eg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#4a9eff" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#4a9eff" stopOpacity="0.05" />
+        </linearGradient>
+      </defs>
+
+      {/* Stage background bands */}
+      {STAGES.map((s, i) => {
+        const x1 = toX(s.start), x2 = toX(s.end);
+        const midX = (x1 + x2) / 2;
+        const dist = (s.end - s.start).toFixed(1).replace(".0", "");
+        return (
+          <g key={s.n}>
+            <rect x={x1} y={padT} width={x2 - x1} height={plotH} fill={stageBg[i]} />
+            <text x={midX} y={14} textAnchor="middle" fill="#4a9eff" fontSize="10" fontFamily="Georgia,serif" fontWeight="bold">Stage {s.n}</text>
+            <text x={midX} y={26} textAnchor="middle" fill="#2a4a6a" fontSize="9" fontFamily="Georgia,serif">{dist} mi</text>
+          </g>
+        );
+      })}
+
+      {/* Elevation grid lines */}
+      {[20, 40, 60, 80].map(ft => (
+        <g key={ft}>
+          <line x1={padL} y1={toY(ft)} x2={padL + plotW} y2={toY(ft)} stroke="#1e2a4e" strokeWidth="0.5" />
+          <text x={padL - 4} y={toY(ft) + 3} textAnchor="end" fill="#2a4a6a" fontSize="8.5" fontFamily="Georgia,serif">{ft}ft</text>
+        </g>
+      ))}
+
+      {/* Elevation fill + line */}
+      <path d={areaD} fill="url(#eg)" />
+      <polyline points={linePts} fill="none" stroke="#4a9eff" strokeWidth="1.8" strokeLinejoin="round" />
+
+      {/* Checkpoint dividers + labels */}
+      {ELEV_CHECKPOINTS.map(({ name, mile }, idx) => {
+        const x = toX(mile);
+        const elev = interpolateElev(mile) ?? 0;
+        const y = toY(elev);
+        return (
+          <g key={mile}>
+            <line x1={x} y1={padT} x2={x} y2={base} stroke="#2a4a8a" strokeWidth={idx === 0 || idx === ELEV_CHECKPOINTS.length - 1 ? 1 : 0.8} strokeDasharray={idx === 0 || idx === ELEV_CHECKPOINTS.length - 1 ? "none" : "3 3"} />
+            <circle cx={x} cy={y} r="3.5" fill="#4a9eff" stroke="#0a0e1a" strokeWidth="1" />
+            <text x={x} y={base + 14} textAnchor="middle" fill="#4a7aaa" fontSize="9" fontFamily="Georgia,serif">{name}</text>
+            <text x={x} y={base + 24} textAnchor="middle" fill="#2a4a6a" fontSize="8" fontFamily="Georgia,serif">{mile === 170.8 ? "170.8" : mile} mi</text>
+          </g>
+        );
+      })}
+
+      {/* Aaron's position */}
+      {curElev !== null && (
+        <g>
+          <line x1={toX(currentMile)} y1={padT} x2={toX(currentMile)} y2={base} stroke="#00c896" strokeWidth="1" strokeDasharray="2 2" strokeOpacity="0.5" />
+          <text x={toX(currentMile)} y={toY(curElev) + 4} textAnchor="middle" fill="#00c896" fontSize="14" fontFamily="sans-serif">▲</text>
+          <text x={toX(currentMile)} y={toY(curElev) - 7} textAnchor="middle" fill="#00c896" fontSize="9" fontFamily="Georgia,serif">Aaron · {parseFloat(currentMile).toFixed(1)}mi</text>
+        </g>
+      )}
+    </svg>
+  );
+}
+
+const card = { background: "#111827", borderRadius: "10px", padding: "20px", border: "1px solid #1e3a6e" };
+const sectionTitle = { fontSize: "11px", letterSpacing: "3px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "14px", textAlign: "center" };
+const statLabel = { fontSize: "10px", color: "#4a6a8a", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" };
+const inputStyle = { background: "#111827", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#e8eaf6", padding: "10px 14px", fontSize: "13px", fontFamily: "inherit" };
+
 export default function AaronTracker() {
   const [liveData, setLiveData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -75,11 +195,33 @@ export default function AaronTracker() {
   const [lastFetched, setLastFetched] = useState(null);
   const [saveLabel, setSaveLabel] = useState("");
 
+  const [journalEntries, setJournalEntries] = useState([]);
+  const [journalLoading, setJournalLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminPwd, setAdminPwd] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [newText, setNewText] = useState("");
+  const [newEmbed, setNewEmbed] = useState("");
+  const [postingEntry, setPostingEntry] = useState(false);
+  const [entryError, setEntryError] = useState("");
+  const [sendingUpdate, setSendingUpdate] = useState(false);
+  const [sendStatus, setSendStatus] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editText, setEditText] = useState("");
+  const [editEmbed, setEditEmbed] = useState("");
+
+  const [subEmail, setSubEmail] = useState("");
+  const [subStatus, setSubStatus] = useState("");
+  const [subLoading, setSubLoading] = useState(false);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setSnapshots(JSON.parse(saved));
     } catch {}
+    fetchJournal();
+    fetchLiveData();
   }, []);
 
   async function fetchLiveData() {
@@ -87,25 +229,16 @@ export default function AaronTracker() {
     setError(null);
     setNarrative("");
     try {
-      const res = await fetch("/api/claude", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          tools: [{ type: "web_search_20250305", name: "web_search" }],
-          system: `You are a race data extractor. Fetch the athlete tracking page and return ONLY a JSON object with these exact keys: status, lastUpdate, currentSpeed, avgSpeed, routeMile, elevationGain, currentElevation, movingTime, stoppedTime, movingAvgSpeed. Use null for any missing values. No markdown, no explanation — raw JSON only.`,
-          messages: [{ role: "user", content: `Fetch this page and extract the stats table for Aaron Rabinowitz: ${ATHLETE_URL}` }],
-        }),
-      });
-      const json = await res.json();
-      const text = json.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-      const cleaned = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
+      const res = await fetch("/api/trackleaders?name=Aaron_Rabinowitz");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      const parsed = parseAthleteData(html);
+      if (!Object.values(parsed).some((v) => v !== null))
+        throw new Error("Page loaded but no stats found. The race may not have started yet.");
       setLiveData(parsed);
       setLastFetched(new Date().toLocaleString());
     } catch (e) {
-      setError("Could not fetch live data. The race may not have started yet, or the page is unavailable.");
+      setError(e.message || "Could not fetch live data.");
     }
     setLoading(false);
   }
@@ -114,34 +247,23 @@ export default function AaronTracker() {
     if (!liveData) return;
     setNarrativeLoading(true);
     const mile = parseMile(liveData.routeMile);
-    const pct = progressPct(mile);
-    const checkpoint = getCheckpoint(mile);
     try {
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 1000,
-          system: `You are an enthusiastic ultra-endurance race commentator covering the 6633 Northern Lights Ultra — a brutal 170.8-mile self-supported foot race through Canada's Arctic, one of the world's toughest races. Write vivid, emotionally engaging daily updates. Be specific, concise (3-4 sentences), and inspirational. Reference the conditions (Arctic cold, remote terrain) when relevant.`,
+          system: `You are an enthusiastic ultra-endurance race commentator covering the 6633 Northern Lights Ultra — a brutal 170.8-mile self-supported foot race through Canada's Arctic, one of the world's toughest races. Write vivid, emotionally engaging updates. Be specific, concise (3-4 sentences), and inspirational. Reference the conditions (Arctic cold, remote terrain) when relevant.`,
           messages: [{
             role: "user",
-            content: `Write a daily progress narrative for Aaron Rabinowitz (USA) based on this data:
-- Race status: ${liveData.status}
-- Route mile: ${liveData.routeMile} of 170.8 (${pct}% complete)
-- Checkpoint status: ${checkpoint}
-- Current speed: ${liveData.currentSpeed}
-- Moving time: ${liveData.movingTime}
-- Stopped time: ${liveData.stoppedTime}
-- Current elevation: ${liveData.currentElevation}
-- Elevation gain: ${liveData.elevationGain}
-- Moving avg speed: ${liveData.movingAvgSpeed}`,
+            content: `Write a progress narrative for Aaron Rabinowitz based on this data:\n- Race status: ${liveData.status}\n- Route mile: ${liveData.routeMile} of 170.8 (${progressPct(mile)}% complete)\n- Checkpoint: ${getCheckpoint(mile)}\n- Current speed: ${liveData.currentSpeed}\n- Moving time: ${liveData.movingTime}\n- Stopped time: ${liveData.stoppedTime}\n- Elevation gain: ${liveData.elevationGain}\n- Moving avg speed: ${liveData.movingAvgSpeed}`,
           }],
         }),
       });
       const json = await res.json();
-      const text = json.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-      setNarrative(text);
+      const text = json.content?.filter((b) => b.type === "text").map((b) => b.text).join("") || "";
+      setNarrative(text || "Could not generate narrative.");
     } catch {
       setNarrative("Could not generate narrative.");
     }
@@ -151,8 +273,7 @@ export default function AaronTracker() {
   function saveSnapshot() {
     if (!liveData) return;
     const label = saveLabel.trim() || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    const snap = { label, data: liveData, narrative, savedAt: new Date().toISOString() };
-    const updated = [snap, ...snapshots].slice(0, 10);
+    const updated = [{ label, data: liveData, narrative, savedAt: new Date().toISOString() }, ...snapshots].slice(0, 10);
     setSnapshots(updated);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
     setSaveLabel("");
@@ -164,38 +285,195 @@ export default function AaronTracker() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
   }
 
+  async function fetchJournal() {
+    setJournalLoading(true);
+    try {
+      const res = await fetch("/api/journal");
+      const data = await res.json();
+      setJournalEntries(data.entries || []);
+    } catch {}
+    setJournalLoading(false);
+  }
+
+  async function postJournalEntry() {
+    if (!newText.trim()) return;
+    setPostingEntry(true);
+    setEntryError("");
+    try {
+      const res = await fetch("/api/journal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle.trim(), text: newText.trim(), embed: newEmbed.trim(), password: adminPwd, raceData: liveData || null }),
+      });
+      if (res.status === 401) { setEntryError("Wrong password."); setIsAdmin(false); }
+      else if (!res.ok) { setEntryError("Failed to post."); }
+      else { setNewTitle(""); setNewText(""); setNewEmbed(""); fetchJournal(); }
+    } catch { setEntryError("Network error."); }
+    setPostingEntry(false);
+  }
+
+  async function saveEditEntry(id) {
+    if (!editText.trim()) return;
+    try {
+      await fetch("/api/journal", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, title: editTitle, text: editText, embed: editEmbed, password: adminPwd }),
+      });
+      setEditingId(null);
+      fetchJournal();
+    } catch {}
+  }
+
+  async function deleteJournalEntry(id) {
+    try {
+      await fetch("/api/journal", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, password: adminPwd }),
+      });
+      fetchJournal();
+    } catch {}
+  }
+
+  async function sendUpdateNow() {
+    setSendingUpdate(true);
+    setSendStatus("");
+    try {
+      const res = await fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "update", password: adminPwd }),
+      });
+      const data = await res.json();
+      setSendStatus(res.ok ? `Sent to ${data.sent} subscriber${data.sent !== 1 ? "s" : ""}` : data.error || "Failed");
+    } catch { setSendStatus("Network error"); }
+    setSendingUpdate(false);
+  }
+
+  async function submitSubscribe(e) {
+    e.preventDefault();
+    setSubLoading(true);
+    setSubStatus("");
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: subEmail }),
+      });
+      setSubStatus(res.ok ? "You're subscribed! You'll get morning, evening, and milestone updates." : "Error subscribing — try again.");
+      if (res.ok) setSubEmail("");
+    } catch { setSubStatus("Network error."); }
+    setSubLoading(false);
+  }
+
   const mile = liveData ? parseMile(liveData.routeMile) : null;
   const pct = progressPct(mile);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0e1a", color: "#e8eaf6", fontFamily: "'Georgia', 'Times New Roman', serif", padding: "0" }}>
-      <div style={{ background: "linear-gradient(135deg, #0d1b3e 0%, #0a0e1a 60%, #1a0a2e 100%)", borderBottom: "1px solid #1e3a6e", padding: "32px 24px 24px", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "radial-gradient(ellipse at 20% 50%, rgba(0,200,150,0.07) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(100,50,200,0.08) 0%, transparent 50%)", pointerEvents: "none" }} />
-        <div style={{ position: "relative" }}>
-          <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "8px" }}>Live Race Tracker</div>
-          <h1 style={{ margin: 0, fontSize: "clamp(22px, 5vw, 36px)", fontWeight: "normal", letterSpacing: "1px", color: "#fff" }}>Aaron Rabinowitz</h1>
-          <div style={{ color: "#7a9cc8", marginTop: "6px", fontSize: "14px" }}>{RACE_NAME} · 170.8 mi · Arctic Canada</div>
-          <div style={{ display: "flex", gap: "12px", marginTop: "20px", flexWrap: "wrap" }}>
-            <button onClick={fetchLiveData} disabled={loading} style={{ background: loading ? "#1e3a6e" : "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: loading ? "not-allowed" : "pointer", letterSpacing: "1px", boxShadow: "0 2px 12px rgba(26,95,200,0.3)" }}>
-              {loading ? "⟳ Fetching..." : "↻ Fetch Live Data"}
-            </button>
-            {liveData && (
-              <button onClick={generateNarrative} disabled={narrativeLoading} style={{ background: narrativeLoading ? "#2a1a4e" : "linear-gradient(135deg, #5a1a9e, #3a0a6e)", color: "#e0d0ff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: narrativeLoading ? "not-allowed" : "pointer", letterSpacing: "1px" }}>
-                {narrativeLoading ? "✦ Writing..." : "✦ Generate Daily Narrative"}
-              </button>
-            )}
+    <div style={{ minHeight: "100vh", background: "#0a0e1a", color: "#e8eaf6", fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+
+      {/* ── HEADER ── */}
+      <div style={{ background: "linear-gradient(135deg, #0d1b3e 0%, #0a0e1a 60%, #1a0a2e 100%)", borderBottom: "1px solid #1e3a6e", padding: "36px 24px 32px", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 20% 50%, rgba(0,200,150,0.07) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(100,50,200,0.08) 0%, transparent 50%)", pointerEvents: "none" }} />
+        <div style={{ position: "relative", maxWidth: "860px", margin: "0 auto" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "8px" }}>Live Race Tracker</div>
+            <h1 style={{ margin: "0 0 6px", fontSize: "clamp(26px, 5vw, 42px)", fontWeight: "normal", color: "#fff" }}>{ATHLETE_NAME}</h1>
+            <div style={{ color: "#7a9cc8", fontSize: "14px", marginBottom: "16px" }}>{RACE_NAME} · 170.8 mi · Arctic Canada · March 18–22, 2026</div>
+            <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+              {!isAdmin ? (
+                <>
+                  <input type="password" value={adminPwd} onChange={(e) => setAdminPwd(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setIsAdmin(true)} placeholder="Admin" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a6a8a", padding: "6px 10px", fontSize: "12px", width: "80px", fontFamily: "inherit" }} />
+                  <button onClick={() => setIsAdmin(true)} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#2a4a6a", padding: "6px 10px", fontSize: "11px", cursor: "pointer" }}>🔒</button>
+                </>
+              ) : (
+                <div style={{ fontSize: "11px", color: "#00c896", letterSpacing: "2px" }}>✓ ADMIN</div>
+              )}
+            </div>
           </div>
-          {lastFetched && <div style={{ color: "#4a7aaa", fontSize: "11px", marginTop: "10px" }}>Last fetched: {lastFetched}</div>}
         </div>
       </div>
 
-      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "24px 20px" }}>
-        {error && <div style={{ background: "#1a0a0a", border: "1px solid #5a1a1a", borderRadius: "8px", padding: "16px", marginBottom: "20px", color: "#ff8080", fontSize: "14px" }}>⚠ {error}</div>}
+      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "36px 20px" }}>
 
-        {liveData && (
-          <div style={{ marginBottom: "28px" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "14px" }}>Current Stats</div>
-            <div style={{ background: "#111827", borderRadius: "10px", padding: "20px", marginBottom: "16px", border: "1px solid #1e3a6e" }}>
+        {/* ── ABOUT ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>What is he up to now?!</div>
+          <div style={{ ...card, lineHeight: "1.9", fontSize: "15px", color: "#c8d4f0" }}>
+            <p style={{ margin: "0 0 14px" }}>
+              Whether you know Aaron as a friend, a brother, a son, a grandson, or an uncle — we're all here for the same reason: to follow along and cheer him on as he does something truly remarkable.
+            </p>
+            <p style={{ margin: "0 0 14px" }}>
+              Aaron is running the <strong style={{ color: "#fff" }}>6633 Northern Lights Ultra</strong> — 170.8 miles of self-supported racing through Canada's Arctic, from Eagle Plains, Yukon to Inuvik, Northwest Territories. He's carrying an emergency beacon and a satellite phone so he can check in at each checkpoint, and we can all follow his progress right here.
+            </p>
+            <p style={{ margin: "0 0 20px" }}>
+              He's doing this in support of <strong style={{ color: "#fff" }}>South Sudan Medical Relief (SSMR)</strong> — an incredible organization that has spent decades delivering critical medical care to communities in Old Fangak, Jonglei State, South Sudan. If you feel moved to support their work, please consider donating below.
+            </p>
+            {/* Photo strip */}
+            <div style={{ display: "flex", gap: "8px" }}>
+              {["/aaron-thumbsup.jpeg", "/aaron-goodluck.jpeg", "/aaron-facetime.jpeg", "/aaron-packing.jpeg"].map((src, i) => (
+                <div key={i} style={{ flex: 1, height: "140px", borderRadius: "8px", overflow: "hidden", border: "1px solid #1e3a6e", boxShadow: "0 3px 12px rgba(0,0,0,0.5)" }}>
+                  <img src={src} alt="Aaron" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── ELEVATION ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Course Elevation Profile</div>
+          <div style={{ ...card, padding: "16px 12px 8px" }}>
+            <ElevationProfile currentMile={mile} />
+          </div>
+        </div>
+
+        {/* ── DONATE ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Support the Cause</div>
+          <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #120a2e)", border: "1px solid #2a1a6e" }}>
+            <p style={{ margin: "0 0 6px", color: "#c8d4f0", fontSize: "15px", lineHeight: "1.8" }}>
+              Your donation directly supports South Sudan Medical Relief's mission to provide vital healthcare to one of the world's most underserved communities.
+            </p>
+            <p style={{ margin: "0 0 20px", color: "#7a9cc8", fontSize: "13px" }}>
+              💬 When donating, please mention <strong style={{ color: "#a0c4ff" }}>Aaron Rabinowitz</strong> in the donation comment box so he gets credit for inspiring your gift.
+            </p>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+              <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", background: "linear-gradient(135deg, #1a6e3a, #0d4a26)", color: "#90ffbc", textDecoration: "none", padding: "12px 28px", borderRadius: "6px", fontSize: "14px", letterSpacing: "1px" }}>
+                Donate to SSMR →
+              </a>
+              <a href="https://www.southsudanmedicalrelief.org" target="_blank" rel="noopener noreferrer" style={{ color: "#4a7aaa", fontSize: "13px", textDecoration: "none" }}>About SSMR →</a>
+              <a href={RACE_INFO_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#4a7aaa", fontSize: "13px", textDecoration: "none" }}>About the race →</a>
+            </div>
+          </div>
+        </div>
+
+        {/* ── CURRENT STATUS ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Aaron's Current Status</div>
+          <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap", justifyContent: "center" }}>
+            <button onClick={fetchLiveData} disabled={loading} style={{ background: loading ? "#1e3a6e" : "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: loading ? "not-allowed" : "pointer", letterSpacing: "1px", boxShadow: "0 2px 12px rgba(26,95,200,0.3)" }}>
+              {loading ? "⟳ Refreshing..." : "↻ Refresh"}
+            </button>
+            {liveData && isAdmin && (
+              <button onClick={generateNarrative} disabled={narrativeLoading} style={{ background: narrativeLoading ? "#2a1a4e" : "linear-gradient(135deg, #5a1a9e, #3a0a6e)", color: "#e0d0ff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: narrativeLoading ? "not-allowed" : "pointer", letterSpacing: "1px" }}>
+                {narrativeLoading ? "✦ Writing..." : "✦ Generate Narrative"}
+              </button>
+            )}
+          </div>
+          {lastFetched && <div style={{ color: "#4a7aaa", fontSize: "11px", marginBottom: "16px" }}>Last fetched: {lastFetched}</div>}
+          {error && <div style={{ background: "#1a0a0a", border: "1px solid #5a1a1a", borderRadius: "8px", padding: "16px", marginBottom: "16px", color: "#ff8080", fontSize: "14px" }}>⚠ {error}</div>}
+
+          {!liveData && !loading && !error && (
+            <div style={{ ...card, textAlign: "center", padding: "48px 20px", color: "#2a4a6a" }}>
+              <div style={{ fontSize: "40px", marginBottom: "14px" }}>❄</div>
+              <div style={{ fontSize: "15px" }}>Loading Aaron's current position...</div>
+            </div>
+          )}
+
+          {liveData && <>
+            <div style={{ ...card, marginBottom: "16px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "13px" }}>
                 <span style={{ color: "#7a9cc8" }}>Route Progress</span>
                 <span style={{ color: "#fff", fontWeight: "bold" }}>{mile !== null ? `${mile} mi` : "Off Route"} <span style={{ color: "#4a9eff" }}>/ {TOTAL_MILES} mi</span></span>
@@ -208,7 +486,7 @@ export default function AaronTracker() {
               </div>
               <div style={{ marginTop: "14px", fontSize: "12px", color: "#5a8aaa" }}>📍 {getCheckpoint(mile)}</div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginBottom: "16px" }}>
               {[
                 { label: "Race Status", value: liveData.status, accent: liveData.status === "Active" ? "#00c896" : "#4a9eff" },
                 { label: "Current Speed", value: liveData.currentSpeed },
@@ -219,73 +497,196 @@ export default function AaronTracker() {
                 { label: "Current Elevation", value: liveData.currentElevation },
                 { label: "Last Update", value: liveData.lastUpdate },
               ].map(({ label, value, accent }) => (
-                <div key={label} style={{ background: "#111827", borderRadius: "8px", padding: "14px", border: "1px solid #1e3a6e" }}>
-                  <div style={{ fontSize: "10px", color: "#4a6a8a", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>{label}</div>
+                <div key={label} style={card}>
+                  <div style={statLabel}>{label}</div>
                   <div style={{ fontSize: "15px", color: accent || "#e8eaf6", fontWeight: "500" }}>{value || "—"}</div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          </>}
 
-        {narrative && (
-          <div style={{ background: "linear-gradient(135deg, #0d1b3e, #120a2e)", border: "1px solid #2a1a6e", borderRadius: "10px", padding: "24px", marginBottom: "28px", position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: 0, right: 0, width: "200px", height: "200px", background: "radial-gradient(circle, rgba(100,50,200,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
-            <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#a070ff", textTransform: "uppercase", marginBottom: "12px" }}>✦ Daily Narrative</div>
-            <p style={{ margin: 0, lineHeight: "1.8", color: "#c8d4f0", fontSize: "15px", fontStyle: "italic" }}>{narrative}</p>
-          </div>
-        )}
+          {narrative && (
+            <div style={{ background: "linear-gradient(135deg, #0d1b3e, #120a2e)", border: "1px solid #2a1a6e", borderRadius: "10px", padding: "24px", marginBottom: "16px" }}>
+              <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#a070ff", textTransform: "uppercase", marginBottom: "12px" }}>✦ Narrative</div>
+              <p style={{ margin: 0, lineHeight: "1.8", color: "#c8d4f0", fontSize: "15px", fontStyle: "italic" }}>{narrative}</p>
+            </div>
+          )}
 
-        {liveData && (
-          <div style={{ marginBottom: "32px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            <input value={saveLabel} onChange={(e) => setSaveLabel(e.target.value)} placeholder={`Label (e.g. "Day 1 End")`} style={{ background: "#111827", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#e8eaf6", padding: "9px 14px", fontSize: "13px", flex: "1", minWidth: "160px" }} />
-            <button onClick={saveSnapshot} style={{ background: "linear-gradient(135deg, #1a6e3a, #0d4a26)", color: "#90ffbc", border: "none", borderRadius: "6px", padding: "9px 20px", fontSize: "13px", cursor: "pointer", letterSpacing: "1px" }}>+ Save Snapshot</button>
-          </div>
-        )}
+          {liveData && isAdmin && (
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              <input value={saveLabel} onChange={(e) => setSaveLabel(e.target.value)} placeholder={`Label (e.g. "Day 1 End")`} style={{ ...inputStyle, flex: "1", minWidth: "160px" }} />
+              <button onClick={saveSnapshot} style={{ background: "linear-gradient(135deg, #1a6e3a, #0d4a26)", color: "#90ffbc", border: "none", borderRadius: "6px", padding: "9px 20px", fontSize: "13px", cursor: "pointer" }}>+ Save Snapshot</button>
+            </div>
+          )}
 
-        {snapshots.length > 0 && (
-          <div>
-            <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "14px" }}>Saved Snapshots</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {snapshots.map((snap, i) => {
-                const m = parseMile(snap.data.routeMile);
-                const p = progressPct(m);
-                return (
-                  <div key={i} style={{ background: "#111827", border: "1px solid #1e3a6e", borderRadius: "10px", padding: "18px" }}>
+          {snapshots.length > 0 && (
+            <div style={{ marginTop: "20px" }}>
+              <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#2a4a6a", textTransform: "uppercase", marginBottom: "12px" }}>Saved Snapshots</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {snapshots.map((snap, i) => {
+                  const m = parseMile(snap.data.routeMile);
+                  return (
+                    <div key={i} style={card}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                        <div>
+                          <div style={{ fontWeight: "600", color: "#fff", fontSize: "14px" }}>{snap.label}</div>
+                          <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "2px" }}>{new Date(snap.savedAt).toLocaleString()}</div>
+                        </div>
+                        <button onClick={() => deleteSnapshot(i)} style={{ background: "none", border: "none", color: "#4a4a6a", cursor: "pointer", fontSize: "16px" }}>×</button>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                        {[["Mile", snap.data.routeMile], ["Progress", `${progressPct(m)}%`], ["Status", snap.data.status], ["Speed", snap.data.currentSpeed], ["Moving Time", snap.data.movingTime], ["Checkpoint", getCheckpoint(m).split("→")[0].replace("✅ ", "")]].map(([lbl, val]) => (
+                          <div key={lbl}>
+                            <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px" }}>{lbl}</div>
+                            <div style={{ fontSize: "12px", color: "#c8d4f0", marginTop: "2px" }}>{val || "—"}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {snap.narrative && (
+                        <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "10px", marginTop: "10px" }}>
+                          <p style={{ margin: 0, fontSize: "13px", color: "#8a9abf", fontStyle: "italic", lineHeight: "1.7" }}>{snap.narrative}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── MAP ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Course Map & All Athletes</div>
+          <div style={{ borderRadius: "10px", overflow: "hidden", border: "1px solid #1e3a6e", background: "#111827" }}>
+            <iframe src={MAP_URL} title="6633 Ultra Race Map" style={{ width: "100%", height: "500px", border: "none", display: "block" }} loading="lazy" />
+          </div>
+          <div style={{ marginTop: "8px", fontSize: "11px", color: "#2a4a6a", textAlign: "right" }}>
+            Map via <a href={MAP_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#2a4a8a", textDecoration: "none" }}>trackleaders.com</a>
+          </div>
+        </div>
+
+        {/* ── JOURNAL ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Race Journal</div>
+          <p style={{ color: "#4a7aaa", fontSize: "14px", margin: "0 0 20px", lineHeight: "1.6" }}>Daily notes and updates from Aaron's team throughout the race.</p>
+
+          {journalLoading && <div style={{ color: "#4a6a8a", fontSize: "14px" }}>Loading...</div>}
+
+          {!journalLoading && journalEntries.length === 0 && (
+            <div style={{ ...card, textAlign: "center", padding: "40px 20px", color: "#2a4a6a", marginBottom: "24px" }}>
+              <div style={{ fontSize: "32px", marginBottom: "10px" }}>📖</div>
+              <div>No journal entries yet — check back once the race starts.</div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "32px" }}>
+            {journalEntries.map((entry) => (
+              <div key={entry.id} style={card}>
+                {editingId === entry.id ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" style={inputStyle} />
+                    <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical" }} />
+                    <textarea value={editEmbed} onChange={(e) => setEditEmbed(e.target.value)} placeholder="Embed HTML (optional — paste iframe code)" rows={3} style={{ ...inputStyle, lineHeight: "1.5", resize: "vertical", fontSize: "11px", fontFamily: "monospace" }} />
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button onClick={() => saveEditEntry(entry.id)} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 18px", fontSize: "13px", cursor: "pointer" }}>Save</button>
+                      <button onClick={() => setEditingId(null)} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a9eff", padding: "8px 14px", fontSize: "13px", cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                       <div>
-                        <div style={{ fontWeight: "600", color: "#fff", fontSize: "15px" }}>{snap.label}</div>
-                        <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "2px" }}>{new Date(snap.savedAt).toLocaleString()}</div>
+                        <div style={{ fontWeight: "600", color: "#fff", fontSize: "16px", marginBottom: "3px" }}>{entry.title}</div>
+                        <div style={{ fontSize: "11px", color: "#4a6a8a" }}>{new Date(entry.createdAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
                       </div>
-                      <button onClick={() => deleteSnapshot(i)} style={{ background: "none", border: "none", color: "#4a4a6a", cursor: "pointer", fontSize: "16px", padding: "0 4px" }}>×</button>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: snap.narrative ? "12px" : "0" }}>
-                      {[["Route Mile", snap.data.routeMile], ["Progress", `${p}%`], ["Status", snap.data.status], ["Speed", snap.data.currentSpeed], ["Moving Time", snap.data.movingTime], ["Checkpoint", getCheckpoint(m).split("→")[0].replace("✅ ", "")]].map(([lbl, val]) => (
-                        <div key={lbl}>
-                          <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px" }}>{lbl}</div>
-                          <div style={{ fontSize: "13px", color: "#c8d4f0", marginTop: "2px" }}>{val || "—"}</div>
+                      {isAdmin && (
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button onClick={() => { setEditingId(entry.id); setEditTitle(entry.title); setEditText(entry.text); setEditEmbed(entry.embed || ""); }} style={{ background: "none", border: "none", color: "#4a9eff", cursor: "pointer", fontSize: "13px" }}>Edit</button>
+                          <button onClick={() => deleteJournalEntry(entry.id)} style={{ background: "none", border: "none", color: "#4a4a6a", cursor: "pointer", fontSize: "18px" }}>×</button>
                         </div>
-                      ))}
+                      )}
                     </div>
-                    {snap.narrative && (
-                      <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "10px", marginTop: "10px" }}>
-                        <p style={{ margin: 0, fontSize: "13px", color: "#8a9abf", fontStyle: "italic", lineHeight: "1.7" }}>{snap.narrative}</p>
+                    <p style={{ margin: "0 0 12px", lineHeight: "1.8", color: "#c8d4f0", fontSize: "15px" }}>{entry.text}</p>
+                    {entry.embed && (
+                      <div style={{ margin: "12px 0", display: "flex", justifyContent: "center" }} dangerouslySetInnerHTML={{ __html: entry.embed }} />
+                    )}
+                    {entry.raceData?.routeMile && (
+                      <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "10px", display: "flex", gap: "24px", flexWrap: "wrap" }}>
+                        {[["Mile", entry.raceData.routeMile], ["Status", entry.raceData.status], ["Speed", entry.raceData.currentSpeed]].map(([lbl, val]) => val && (
+                          <div key={lbl}>
+                            <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px" }}>{lbl}</div>
+                            <div style={{ fontSize: "13px", color: "#7a9cc8", marginTop: "2px" }}>{val}</div>
+                          </div>
+                        ))}
                       </div>
                     )}
-                  </div>
-                );
-              })}
-            </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
-        )}
 
-        {!liveData && !loading && !error && (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "#2a4a6a" }}>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>❄</div>
-            <div style={{ fontSize: "16px" }}>Hit "Fetch Live Data" to load Aaron's current progress</div>
-            <div style={{ fontSize: "13px", marginTop: "8px", color: "#1e3a5a" }}>Race started March 18, 2026 at 12:00 PM MDT</div>
+          {/* Admin */}
+          {isAdmin && <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "24px" }}>
+            <>
+              <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#00c896", textTransform: "uppercase", marginBottom: "16px" }}>✓ Admin</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
+                  <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title (optional)" style={inputStyle} />
+                  <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Write a journal entry..." rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical" }} />
+                  <textarea value={newEmbed} onChange={(e) => setNewEmbed(e.target.value)} placeholder="Embed HTML (optional — paste iframe code)" rows={3} style={{ ...inputStyle, lineHeight: "1.5", resize: "vertical", fontSize: "11px", fontFamily: "monospace" }} />
+                </div>
+                {liveData && <div style={{ fontSize: "12px", color: "#4a7aaa", marginBottom: "10px" }}>Current race snapshot will be attached.</div>}
+                {entryError && <div style={{ color: "#ff6060", fontSize: "12px", marginBottom: "10px" }}>{entryError}</div>}
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                  <button onClick={postJournalEntry} disabled={postingEntry || !newText.trim()} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: "pointer" }}>
+                    {postingEntry ? "Posting..." : "Post Entry"}
+                  </button>
+                  <button onClick={sendUpdateNow} disabled={sendingUpdate} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a9eff", padding: "10px 18px", fontSize: "13px", cursor: "pointer" }}>
+                    {sendingUpdate ? "Sending..." : "Send Email Update Now"}
+                  </button>
+                  {sendStatus && <span style={{ fontSize: "12px", color: "#00c896" }}>{sendStatus}</span>}
+                </div>
+            </>
+          </div>}
+        </div>
+
+        {/* ── FACEBOOK ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={{ ...sectionTitle, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+            <span>6633 Arctic Ultra — Race Updates</span>
+            <a href="https://www.facebook.com/6633ArcticUltra" target="_blank" rel="noopener noreferrer" style={{ fontSize: "10px", color: "#4a9eff", textDecoration: "none", border: "1px solid #1e3a6e", borderRadius: "4px", padding: "2px 8px", letterSpacing: "1px" }}>Facebook →</a>
           </div>
-        )}
+          <div style={{ borderRadius: "10px", overflow: "hidden", border: "1px solid #1e3a6e", background: "#111827", display: "flex", justifyContent: "center", padding: "16px" }}>
+            <iframe
+              src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2F6633ArcticUltra%2F&tabs=timeline&width=500&height=600&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=false"
+              width="500"
+              height="600"
+              style={{ border: "none", overflow: "hidden", maxWidth: "100%" }}
+              scrolling="no"
+              allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+            />
+          </div>
+        </div>
+
+        {/* ── SUBSCRIBE ── */}
+        <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #0a0e1a)" }}>
+          <h2 style={{ margin: "0 0 8px", fontSize: "18px", fontWeight: "normal", color: "#fff" }}>Get Race Updates</h2>
+          <p style={{ margin: "0 0 18px", color: "#4a7aaa", fontSize: "14px", lineHeight: "1.6" }}>
+            Subscribe to receive email updates on Aaron's progress — morning check-ins, evening recaps, and alerts when he reaches key milestones.
+          </p>
+          {subStatus ? (
+            <div style={{ color: "#00c896", fontSize: "14px", lineHeight: "1.6" }}>{subStatus}</div>
+          ) : (
+            <form onSubmit={submitSubscribe} style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <input type="email" value={subEmail} onChange={(e) => setSubEmail(e.target.value)} placeholder="your@email.com" required style={{ ...inputStyle, flex: "1", minWidth: "200px" }} />
+              <button type="submit" disabled={subLoading} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: "pointer", letterSpacing: "1px" }}>
+                {subLoading ? "Subscribing..." : "Subscribe"}
+              </button>
+            </form>
+          )}
+        </div>
+
       </div>
     </div>
   );
