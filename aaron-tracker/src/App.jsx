@@ -66,6 +66,41 @@ function progressPct(mile) {
   return Math.min(100, (mile / TOTAL_MILES) * 100).toFixed(1);
 }
 
+const ROUTE_WAYPOINTS = [
+  [0,    66.534, -136.706],
+  [30,   67.437, -134.884],
+  [64,   67.700, -134.500],
+  [92,   68.222, -135.012],
+  [154,  68.480, -135.800],
+  [170.8,68.360, -133.723],
+];
+
+function getRouteCoords(mile) {
+  const m = parseFloat(mile);
+  if (isNaN(m)) return [66.534, -136.706];
+  for (let i = 0; i < ROUTE_WAYPOINTS.length - 1; i++) {
+    const [m0, lat0, lng0] = ROUTE_WAYPOINTS[i];
+    const [m1, lat1, lng1] = ROUTE_WAYPOINTS[i + 1];
+    if (m >= m0 && m <= m1) {
+      const t = (m - m0) / (m1 - m0);
+      return [lat0 + t * (lat1 - lat0), lng0 + t * (lng1 - lng0)];
+    }
+  }
+  return [68.360, -133.723];
+}
+
+function describeWeather(code) {
+  if (code === 0) return { icon: "☀️", desc: "Clear" };
+  if (code <= 3)  return { icon: "⛅", desc: "Partly Cloudy" };
+  if (code <= 48) return { icon: "🌫️", desc: "Fog" };
+  if (code <= 55) return { icon: "🌦️", desc: "Drizzle" };
+  if (code <= 65) return { icon: "🌧️", desc: "Rain" };
+  if (code <= 77) return { icon: "❄️", desc: "Snow" };
+  if (code <= 82) return { icon: "🌧️", desc: "Rain Showers" };
+  if (code <= 86) return { icon: "🌨️", desc: "Snow Showers" };
+  return { icon: "⛈️", desc: "Storm" };
+}
+
 // Elevation in feet, digitised from trackleaders 6633ultra26f profile
 const ELEV_POINTS = [
   [0,70],[2,35],[4,22],[6,20],[10,21],[15,22],[20,24],[25,27],[30,35],
@@ -188,7 +223,6 @@ const inputStyle = { background: "#111827", border: "1px solid #1e3a6e", borderR
 export default function AaronTracker() {
   const [liveData, setLiveData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [narrative, setNarrative] = useState("");
   const [narrativeLoading, setNarrativeLoading] = useState(false);
   const [snapshots, setSnapshots] = useState([]);
   const [error, setError] = useState(null);
@@ -206,6 +240,9 @@ export default function AaronTracker() {
   const [entryError, setEntryError] = useState("");
   const [sendingUpdate, setSendingUpdate] = useState(false);
   const [sendStatus, setSendStatus] = useState("");
+  const [testEmail, setTestEmail] = useState("");
+  const [weather, setWeather] = useState(null);
+  const [leaderboard, setLeaderboard] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [editText, setEditText] = useState("");
@@ -227,7 +264,6 @@ export default function AaronTracker() {
   async function fetchLiveData() {
     setLoading(true);
     setError(null);
-    setNarrative("");
     try {
       const res = await fetch("/api/trackleaders?name=Aaron_Rabinowitz");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -237,6 +273,21 @@ export default function AaronTracker() {
         throw new Error("Page loaded but no stats found. The race may not have started yet.");
       setLiveData(parsed);
       setLastFetched(new Date().toLocaleString());
+      // Fetch weather for Aaron's current location
+      try {
+        const [lat, lng] = getRouteCoords(parsed.routeMile);
+        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=temperature_2m,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`);
+        const wJson = await wRes.json();
+        const c = wJson.current;
+        const { icon, desc } = describeWeather(c.weather_code);
+        setWeather({ tempF: Math.round(c.temperature_2m), tempC: Math.round((c.temperature_2m - 32) * 5 / 9), windMph: Math.round(c.wind_speed_10m), icon, desc });
+      } catch {}
+      // Fetch leaderboard
+      try {
+        const lRes = await fetch("/api/leaderboard");
+        const lJson = await lRes.json();
+        setLeaderboard(lJson);
+      } catch {}
     } catch (e) {
       setError(e.message || "Could not fetch live data.");
     }
@@ -263,9 +314,9 @@ export default function AaronTracker() {
       });
       const json = await res.json();
       const text = json.content?.filter((b) => b.type === "text").map((b) => b.text).join("") || "";
-      setNarrative(text || "Could not generate narrative.");
+      setNewText(text || "Could not generate narrative.");
     } catch {
-      setNarrative("Could not generate narrative.");
+      setNewText("Could not generate narrative.");
     }
     setNarrativeLoading(false);
   }
@@ -273,7 +324,7 @@ export default function AaronTracker() {
   function saveSnapshot() {
     if (!liveData) return;
     const label = saveLabel.trim() || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    const updated = [{ label, data: liveData, narrative, savedAt: new Date().toISOString() }, ...snapshots].slice(0, 10);
+    const updated = [{ label, data: liveData, savedAt: new Date().toISOString() }, ...snapshots].slice(0, 10);
     setSnapshots(updated);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
     setSaveLabel("");
@@ -336,17 +387,19 @@ export default function AaronTracker() {
     } catch {}
   }
 
-  async function sendUpdateNow() {
+  async function sendUpdateNow(test = false) {
     setSendingUpdate(true);
     setSendStatus("");
     try {
+      const body = { type: "evening", password: adminPwd };
+      if (test) body.testEmail = testEmail.trim();
       const res = await fetch("/api/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "update", password: adminPwd }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      setSendStatus(res.ok ? `Sent to ${data.sent} subscriber${data.sent !== 1 ? "s" : ""}` : data.error || "Failed");
+      setSendStatus(res.ok ? (test ? `Test sent to ${data.to}` : `Sent to ${data.sent} subscriber${data.sent !== 1 ? "s" : ""}`) : data.error || "Failed");
     } catch { setSendStatus("Network error"); }
     setSendingUpdate(false);
   }
@@ -456,11 +509,6 @@ export default function AaronTracker() {
             <button onClick={fetchLiveData} disabled={loading} style={{ background: loading ? "#1e3a6e" : "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: loading ? "not-allowed" : "pointer", letterSpacing: "1px", boxShadow: "0 2px 12px rgba(26,95,200,0.3)" }}>
               {loading ? "⟳ Refreshing..." : "↻ Refresh"}
             </button>
-            {liveData && isAdmin && (
-              <button onClick={generateNarrative} disabled={narrativeLoading} style={{ background: narrativeLoading ? "#2a1a4e" : "linear-gradient(135deg, #5a1a9e, #3a0a6e)", color: "#e0d0ff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: narrativeLoading ? "not-allowed" : "pointer", letterSpacing: "1px" }}>
-                {narrativeLoading ? "✦ Writing..." : "✦ Generate Narrative"}
-              </button>
-            )}
           </div>
           {lastFetched && <div style={{ color: "#4a7aaa", fontSize: "11px", marginBottom: "16px" }}>Last fetched: {lastFetched}</div>}
           {error && <div style={{ background: "#1a0a0a", border: "1px solid #5a1a1a", borderRadius: "8px", padding: "16px", marginBottom: "16px", color: "#ff8080", fontSize: "14px" }}>⚠ {error}</div>}
@@ -487,30 +535,77 @@ export default function AaronTracker() {
               <div style={{ marginTop: "14px", fontSize: "12px", color: "#5a8aaa" }}>📍 {getCheckpoint(mile)}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginBottom: "16px" }}>
-              {[
-                { label: "Race Status", value: liveData.status, accent: liveData.status === "Active" ? "#00c896" : "#4a9eff" },
-                { label: "Current Speed", value: liveData.currentSpeed },
-                { label: "Moving Avg Speed", value: liveData.movingAvgSpeed },
-                { label: "Moving Time", value: liveData.movingTime },
-                { label: "Stopped Time", value: liveData.stoppedTime },
-                { label: "Elevation Gain", value: liveData.elevationGain },
-                { label: "Current Elevation", value: liveData.currentElevation },
-                { label: "Last Update", value: liveData.lastUpdate },
-              ].map(({ label, value, accent }) => (
-                <div key={label} style={card}>
-                  <div style={statLabel}>{label}</div>
-                  <div style={{ fontSize: "15px", color: accent || "#e8eaf6", fontWeight: "500" }}>{value || "—"}</div>
+              {/* 1. Race Status */}
+              <div style={card}>
+                <div style={statLabel}>Race Status</div>
+                <div style={{ fontSize: "15px", color: liveData.status === "Active" ? "#00c896" : "#4a9eff", fontWeight: "500" }}>{liveData.status || "—"}</div>
+              </div>
+              {/* 2. Current Speed */}
+              <div style={card}>
+                <div style={statLabel}>Current Speed</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.currentSpeed || "—"}</div>
+              </div>
+              {/* 3. Temperature */}
+              {weather && (
+                <div style={card}>
+                  <div style={statLabel}>Conditions at Location</div>
+                  <div style={{ fontSize: "20px", marginBottom: "2px" }}>{weather.icon}</div>
+                  <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{weather.tempF}°F / {weather.tempC}°C</div>
+                  <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "2px" }}>{weather.desc} · {weather.windMph} mph wind</div>
                 </div>
-              ))}
+              )}
+              {/* 4. Current Elevation */}
+              <div style={card}>
+                <div style={statLabel}>Current Elevation</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.currentElevation || "—"}</div>
+              </div>
+              {/* 5. Elevation Gain */}
+              <div style={card}>
+                <div style={statLabel}>Elevation Gain</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.elevationGain || "—"}</div>
+              </div>
+              {/* 6 & 7. Race Position + Gap to Leader */}
+              {leaderboard?.athletes?.length > 0 && leaderboard.aaronRank > 0 && (() => {
+                const aaron = leaderboard.athletes[leaderboard.aaronRank - 1];
+                const leader = leaderboard.athletes[0];
+                const ahead = leaderboard.aaronRank > 1 ? leaderboard.athletes[leaderboard.aaronRank - 2] : null;
+                return (<>
+                  <div style={card}>
+                    <div style={statLabel}>Race Position</div>
+                    <div style={{ fontSize: "22px", color: "#4a9eff", fontWeight: "bold" }}>#{leaderboard.aaronRank} <span style={{ fontSize: "12px", color: "#4a6a8a" }}>of {leaderboard.remaining}</span></div>
+                    {ahead && <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "4px" }}>{(ahead.routeMile - aaron.routeMile).toFixed(1)} mi behind {ahead.name.split(" ")[0]}</div>}
+                  </div>
+                  {leaderboard.aaronRank > 1 && <div style={card}>
+                    <div style={statLabel}>Gap to Leader</div>
+                    <div style={{ fontSize: "18px", color: "#e8eaf6", fontWeight: "500" }}>{(leader.routeMile - aaron.routeMile).toFixed(1)} mi</div>
+                    <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "4px" }}>behind {leader.name}</div>
+                  </div>}
+                  <div style={card}>
+                    <div style={statLabel}>Field Remaining</div>
+                    <div style={{ fontSize: "22px", color: "#e8eaf6", fontWeight: "500" }}>{leaderboard.remaining} <span style={{ fontSize: "12px", color: "#4a6a8a" }}>/ {leaderboard.total} started</span></div>
+                    <div style={{ fontSize: "12px", color: "#ff8080", marginTop: "4px" }}>{leaderboard.scratched} scratched</div>
+                  </div>
+                </>);
+              })()}
+              {/* Remaining stats */}
+              <div style={card}>
+                <div style={statLabel}>Moving Avg Speed</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.movingAvgSpeed || "—"}</div>
+              </div>
+              <div style={card}>
+                <div style={statLabel}>Moving Time</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.movingTime || "—"}</div>
+              </div>
+              <div style={card}>
+                <div style={statLabel}>Stopped Time</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.stoppedTime || "—"}</div>
+              </div>
+              <div style={card}>
+                <div style={statLabel}>Last Update</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.lastUpdate || "—"}</div>
+              </div>
             </div>
           </>}
-
-          {narrative && (
-            <div style={{ background: "linear-gradient(135deg, #0d1b3e, #120a2e)", border: "1px solid #2a1a6e", borderRadius: "10px", padding: "24px", marginBottom: "16px" }}>
-              <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#a070ff", textTransform: "uppercase", marginBottom: "12px" }}>✦ Narrative</div>
-              <p style={{ margin: 0, lineHeight: "1.8", color: "#c8d4f0", fontSize: "15px", fontStyle: "italic" }}>{narrative}</p>
-            </div>
-          )}
 
           {liveData && isAdmin && (
             <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
@@ -571,8 +666,41 @@ export default function AaronTracker() {
           <div style={sectionTitle}>Race Journal</div>
           <p style={{ color: "#4a7aaa", fontSize: "14px", margin: "0 0 20px", lineHeight: "1.6" }}>Daily notes and updates from Aaron's team throughout the race.</p>
 
-          {journalLoading && <div style={{ color: "#4a6a8a", fontSize: "14px" }}>Loading...</div>}
+          {/* Admin write panel */}
+          {isAdmin && <div style={{ ...card, marginBottom: "24px" }}>
+            <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#00c896", textTransform: "uppercase", marginBottom: "16px" }}>✓ New Entry</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
+              <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title (optional)" style={inputStyle} />
+              <div style={{ position: "relative" }}>
+                <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Write a journal entry..." rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical", width: "100%", boxSizing: "border-box" }} />
+                {liveData && (
+                  <button onClick={generateNarrative} disabled={narrativeLoading} style={{ position: "absolute", bottom: "10px", right: "10px", background: narrativeLoading ? "#2a1a4e" : "linear-gradient(135deg, #5a1a9e, #3a0a6e)", color: "#e0d0ff", border: "none", borderRadius: "5px", padding: "5px 12px", fontSize: "11px", cursor: narrativeLoading ? "not-allowed" : "pointer", letterSpacing: "1px" }}>
+                    {narrativeLoading ? "✦ Writing..." : "✦ Generate"}
+                  </button>
+                )}
+              </div>
+              <textarea value={newEmbed} onChange={(e) => setNewEmbed(e.target.value)} placeholder="Embed HTML (optional — paste iframe code)" rows={3} style={{ ...inputStyle, lineHeight: "1.5", resize: "vertical", fontSize: "11px", fontFamily: "monospace" }} />
+            </div>
+            {liveData && <div style={{ fontSize: "12px", color: "#4a7aaa", marginBottom: "10px" }}>Current race snapshot will be attached.</div>}
+            {entryError && <div style={{ color: "#ff6060", fontSize: "12px", marginBottom: "10px" }}>{entryError}</div>}
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
+              <button onClick={postJournalEntry} disabled={postingEntry || !newText.trim()} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: "pointer" }}>
+                {postingEntry ? "Posting..." : "Post Entry"}
+              </button>
+              <button onClick={() => sendUpdateNow(false)} disabled={sendingUpdate} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a9eff", padding: "10px 18px", fontSize: "13px", cursor: "pointer" }}>
+                {sendingUpdate ? "Sending..." : "Send to All Subscribers"}
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="your@email.com" style={{ ...inputStyle, padding: "8px 12px", fontSize: "12px", flex: "1", minWidth: "180px" }} />
+              <button onClick={() => sendUpdateNow(true)} disabled={sendingUpdate || !testEmail.trim()} style={{ background: "none", border: "1px solid #2a4a6a", borderRadius: "6px", color: "#7a9cc8", padding: "8px 14px", fontSize: "12px", cursor: "pointer" }}>
+                Send Test
+              </button>
+            </div>
+            {sendStatus && <div style={{ fontSize: "12px", color: "#00c896", marginTop: "8px" }}>{sendStatus}</div>}
+          </div>}
 
+          {journalLoading && <div style={{ color: "#4a6a8a", fontSize: "14px" }}>Loading...</div>}
           {!journalLoading && journalEntries.length === 0 && (
             <div style={{ ...card, textAlign: "center", padding: "40px 20px", color: "#2a4a6a", marginBottom: "24px" }}>
               <div style={{ fontSize: "32px", marginBottom: "10px" }}>📖</div>
@@ -580,7 +708,7 @@ export default function AaronTracker() {
             </div>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "32px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {journalEntries.map((entry) => (
               <div key={entry.id} style={card}>
                 {editingId === entry.id ? (
@@ -627,28 +755,6 @@ export default function AaronTracker() {
             ))}
           </div>
 
-          {/* Admin */}
-          {isAdmin && <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "24px" }}>
-            <>
-              <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#00c896", textTransform: "uppercase", marginBottom: "16px" }}>✓ Admin</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
-                  <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title (optional)" style={inputStyle} />
-                  <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Write a journal entry..." rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical" }} />
-                  <textarea value={newEmbed} onChange={(e) => setNewEmbed(e.target.value)} placeholder="Embed HTML (optional — paste iframe code)" rows={3} style={{ ...inputStyle, lineHeight: "1.5", resize: "vertical", fontSize: "11px", fontFamily: "monospace" }} />
-                </div>
-                {liveData && <div style={{ fontSize: "12px", color: "#4a7aaa", marginBottom: "10px" }}>Current race snapshot will be attached.</div>}
-                {entryError && <div style={{ color: "#ff6060", fontSize: "12px", marginBottom: "10px" }}>{entryError}</div>}
-                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-                  <button onClick={postJournalEntry} disabled={postingEntry || !newText.trim()} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: "pointer" }}>
-                    {postingEntry ? "Posting..." : "Post Entry"}
-                  </button>
-                  <button onClick={sendUpdateNow} disabled={sendingUpdate} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a9eff", padding: "10px 18px", fontSize: "13px", cursor: "pointer" }}>
-                    {sendingUpdate ? "Sending..." : "Send Email Update Now"}
-                  </button>
-                  {sendStatus && <span style={{ fontSize: "12px", color: "#00c896" }}>{sendStatus}</span>}
-                </div>
-            </>
-          </div>}
         </div>
 
         {/* ── FACEBOOK ── */}

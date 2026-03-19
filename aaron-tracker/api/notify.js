@@ -209,6 +209,18 @@ export default async function handler(req, res) {
       journalEntries = todaysJournalEntries(journal);
     }
 
+    // Test mode: send only to a single address, skip subscriber list
+    const testEmail = req.body?.testEmail;
+    if (testEmail) {
+      const { subject, html: htmlBody } = buildEmail(data, type, testEmail, { dayMiles, journalEntries });
+      const emailRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev", to: testEmail, subject: `[TEST] ${subject}`, html: htmlBody }),
+      });
+      return res.status(200).json({ ok: emailRes.ok, test: true, to: testEmail });
+    }
+
     // Get subscribers
     const { data: subscribers } = await readFile("data/subscribers.json");
     const list = subscribers || [];
