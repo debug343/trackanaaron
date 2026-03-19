@@ -218,7 +218,8 @@ function ElevationProfile({ currentMile }) {
 const card = { background: "#111827", borderRadius: "10px", padding: "20px", border: "1px solid #1e3a6e" };
 const sectionTitle = { fontSize: "11px", letterSpacing: "3px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "14px", textAlign: "center" };
 const statLabel = { fontSize: "10px", color: "#4a6a8a", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" };
-const inputStyle = { background: "#111827", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#e8eaf6", padding: "10px 14px", fontSize: "13px", fontFamily: "inherit" };
+// fontSize 16px is required to prevent iOS Safari auto-zoom on input focus
+const inputStyle = { background: "#111827", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#e8eaf6", padding: "10px 14px", fontSize: "16px", fontFamily: "inherit" };
 
 export default function AaronTracker() {
   const [liveData, setLiveData] = useState(null);
@@ -437,8 +438,8 @@ export default function AaronTracker() {
             <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
               {!isAdmin ? (
                 <>
-                  <input type="password" value={adminPwd} onChange={(e) => setAdminPwd(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setIsAdmin(true)} placeholder="Admin" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a6a8a", padding: "6px 10px", fontSize: "12px", width: "80px", fontFamily: "inherit" }} />
-                  <button onClick={() => setIsAdmin(true)} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#2a4a6a", padding: "6px 10px", fontSize: "11px", cursor: "pointer" }}>🔒</button>
+                  <input type="password" value={adminPwd} onChange={(e) => setAdminPwd(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setIsAdmin(true)} placeholder="Admin" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a6a8a", padding: "10px 12px", fontSize: "16px", width: "90px", fontFamily: "inherit" }} />
+                  <button onClick={() => setIsAdmin(true)} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#2a4a6a", padding: "10px 14px", fontSize: "16px", cursor: "pointer", minHeight: "44px" }}>🔒</button>
                 </>
               ) : (
                 <div style={{ fontSize: "11px", color: "#00c896", letterSpacing: "2px" }}>✓ ADMIN</div>
@@ -464,9 +465,9 @@ export default function AaronTracker() {
               He's doing this in support of <strong style={{ color: "#fff" }}>South Sudan Medical Relief (SSMR)</strong> — an incredible organization that has spent decades delivering critical medical care to communities in Old Fangak, Jonglei State, South Sudan. If you feel moved to support their work, please consider donating below.
             </p>
             {/* Photo strip */}
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
               {["/aaron-thumbsup.jpeg", "/aaron-goodluck.jpeg", "/aaron-facetime.jpeg", "/aaron-packing.jpeg"].map((src, i) => (
-                <div key={i} style={{ flex: 1, height: "140px", borderRadius: "8px", overflow: "hidden", border: "1px solid #1e3a6e", boxShadow: "0 3px 12px rgba(0,0,0,0.5)" }}>
+                <div key={i} style={{ height: "clamp(70px, 20vw, 140px)", borderRadius: "8px", overflow: "hidden", border: "1px solid #1e3a6e", boxShadow: "0 3px 12px rgba(0,0,0,0.5)" }}>
                   <img src={src} alt="Aaron" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </div>
               ))}
@@ -506,7 +507,7 @@ export default function AaronTracker() {
         <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>Aaron's Current Status</div>
           <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap", justifyContent: "center" }}>
-            <button onClick={fetchLiveData} disabled={loading} style={{ background: loading ? "#1e3a6e" : "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: loading ? "not-allowed" : "pointer", letterSpacing: "1px", boxShadow: "0 2px 12px rgba(26,95,200,0.3)" }}>
+            <button onClick={fetchLiveData} disabled={loading} style={{ background: loading ? "#1e3a6e" : "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 28px", fontSize: "15px", cursor: loading ? "not-allowed" : "pointer", letterSpacing: "1px", boxShadow: "0 2px 12px rgba(26,95,200,0.3)", minHeight: "48px" }}>
               {loading ? "⟳ Refreshing..." : "↻ Refresh"}
             </button>
           </div>
@@ -532,9 +533,9 @@ export default function AaronTracker() {
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", fontSize: "11px", color: "#4a6a8a" }}>
                 <span>Start</span><span style={{ color: "#4a9eff" }}>{pct}%</span><span>Finish</span>
               </div>
-              <div style={{ marginTop: "14px", fontSize: "12px", color: "#5a8aaa" }}>📍 {getCheckpoint(mile)}</div>
+              <div style={{ marginTop: "14px", fontSize: "12px", color: "#5a8aaa", overflowWrap: "break-word", wordBreak: "break-word" }}>📍 {getCheckpoint(mile)}</div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "12px", marginBottom: "16px" }}>
               {/* 1. Race Status */}
               <div style={card}>
                 <div style={statLabel}>Race Status</div>
@@ -629,7 +630,7 @@ export default function AaronTracker() {
                         </div>
                         <button onClick={() => deleteSnapshot(i)} style={{ background: "none", border: "none", color: "#4a4a6a", cursor: "pointer", fontSize: "16px" }}>×</button>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "8px" }}>
                         {[["Mile", snap.data.routeMile], ["Progress", `${progressPct(m)}%`], ["Status", snap.data.status], ["Speed", snap.data.currentSpeed], ["Moving Time", snap.data.movingTime], ["Checkpoint", getCheckpoint(m).split("→")[0].replace("✅ ", "")]].map(([lbl, val]) => (
                           <div key={lbl}>
                             <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px" }}>{lbl}</div>
@@ -654,7 +655,7 @@ export default function AaronTracker() {
         <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>Course Map & All Athletes</div>
           <div style={{ borderRadius: "10px", overflow: "hidden", border: "1px solid #1e3a6e", background: "#111827" }}>
-            <iframe src={MAP_URL} title="6633 Ultra Race Map" style={{ width: "100%", height: "500px", border: "none", display: "block" }} loading="lazy" />
+            <iframe src={MAP_URL} title="6633 Ultra Race Map" style={{ width: "100%", height: "clamp(300px, 60vw, 500px)", border: "none", display: "block" }} loading="lazy" />
           </div>
           <div style={{ marginTop: "8px", fontSize: "11px", color: "#2a4a6a", textAlign: "right" }}>
             Map via <a href={MAP_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#2a4a8a", textDecoration: "none" }}>trackleaders.com</a>
@@ -671,29 +672,27 @@ export default function AaronTracker() {
             <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#00c896", textTransform: "uppercase", marginBottom: "16px" }}>✓ New Entry</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
               <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title (optional)" style={inputStyle} />
-              <div style={{ position: "relative" }}>
-                <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Write a journal entry..." rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical", width: "100%", boxSizing: "border-box" }} />
-                {liveData && (
-                  <button onClick={generateNarrative} disabled={narrativeLoading} style={{ position: "absolute", bottom: "10px", right: "10px", background: narrativeLoading ? "#2a1a4e" : "linear-gradient(135deg, #5a1a9e, #3a0a6e)", color: "#e0d0ff", border: "none", borderRadius: "5px", padding: "5px 12px", fontSize: "11px", cursor: narrativeLoading ? "not-allowed" : "pointer", letterSpacing: "1px" }}>
-                    {narrativeLoading ? "✦ Writing..." : "✦ Generate"}
-                  </button>
-                )}
-              </div>
+              <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Write a journal entry..." rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical", width: "100%", boxSizing: "border-box" }} />
+              {liveData && (
+                <button onClick={generateNarrative} disabled={narrativeLoading} style={{ alignSelf: "flex-start", background: narrativeLoading ? "#2a1a4e" : "linear-gradient(135deg, #5a1a9e, #3a0a6e)", color: "#e0d0ff", border: "none", borderRadius: "5px", padding: "8px 16px", fontSize: "13px", cursor: narrativeLoading ? "not-allowed" : "pointer", letterSpacing: "1px", minHeight: "40px" }}>
+                  {narrativeLoading ? "✦ Writing..." : "✦ Generate Narrative from Live Data"}
+                </button>
+              )}
               <textarea value={newEmbed} onChange={(e) => setNewEmbed(e.target.value)} placeholder="Embed HTML (optional — paste iframe code)" rows={3} style={{ ...inputStyle, lineHeight: "1.5", resize: "vertical", fontSize: "11px", fontFamily: "monospace" }} />
             </div>
             {liveData && <div style={{ fontSize: "12px", color: "#4a7aaa", marginBottom: "10px" }}>Current race snapshot will be attached.</div>}
             {entryError && <div style={{ color: "#ff6060", fontSize: "12px", marginBottom: "10px" }}>{entryError}</div>}
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
-              <button onClick={postJournalEntry} disabled={postingEntry || !newText.trim()} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: "pointer" }}>
+              <button onClick={postJournalEntry} disabled={postingEntry || !newText.trim()} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 22px", fontSize: "15px", cursor: "pointer", minHeight: "48px", flex: "1" }}>
                 {postingEntry ? "Posting..." : "Post Entry"}
               </button>
-              <button onClick={() => sendUpdateNow(false)} disabled={sendingUpdate} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a9eff", padding: "10px 18px", fontSize: "13px", cursor: "pointer" }}>
+              <button onClick={() => sendUpdateNow(false)} disabled={sendingUpdate} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a9eff", padding: "12px 18px", fontSize: "14px", cursor: "pointer", minHeight: "48px", flex: "1" }}>
                 {sendingUpdate ? "Sending..." : "Send to All Subscribers"}
               </button>
             </div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-              <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="your@email.com" style={{ ...inputStyle, padding: "8px 12px", fontSize: "12px", flex: "1", minWidth: "180px" }} />
-              <button onClick={() => sendUpdateNow(true)} disabled={sendingUpdate || !testEmail.trim()} style={{ background: "none", border: "1px solid #2a4a6a", borderRadius: "6px", color: "#7a9cc8", padding: "8px 14px", fontSize: "12px", cursor: "pointer" }}>
+              <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="your@email.com" style={{ ...inputStyle, flex: "1", minWidth: "160px" }} />
+              <button onClick={() => sendUpdateNow(true)} disabled={sendingUpdate || !testEmail.trim()} style={{ background: "none", border: "1px solid #2a4a6a", borderRadius: "6px", color: "#7a9cc8", padding: "12px 14px", fontSize: "14px", cursor: "pointer", minHeight: "48px" }}>
                 Send Test
               </button>
             </div>
@@ -730,8 +729,8 @@ export default function AaronTracker() {
                       </div>
                       {isAdmin && (
                         <div style={{ display: "flex", gap: "8px" }}>
-                          <button onClick={() => { setEditingId(entry.id); setEditTitle(entry.title); setEditText(entry.text); setEditEmbed(entry.embed || ""); }} style={{ background: "none", border: "none", color: "#4a9eff", cursor: "pointer", fontSize: "13px" }}>Edit</button>
-                          <button onClick={() => deleteJournalEntry(entry.id)} style={{ background: "none", border: "none", color: "#4a4a6a", cursor: "pointer", fontSize: "18px" }}>×</button>
+                          <button onClick={() => { setEditingId(entry.id); setEditTitle(entry.title); setEditText(entry.text); setEditEmbed(entry.embed || ""); }} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "5px", color: "#4a9eff", cursor: "pointer", fontSize: "13px", padding: "6px 12px", minHeight: "36px" }}>Edit</button>
+                          <button onClick={() => deleteJournalEntry(entry.id)} style={{ background: "none", border: "1px solid #2a2a4a", borderRadius: "5px", color: "#4a4a6a", cursor: "pointer", fontSize: "18px", padding: "4px 10px", minHeight: "36px" }}>×</button>
                         </div>
                       )}
                     </div>
@@ -766,9 +765,9 @@ export default function AaronTracker() {
           <div style={{ borderRadius: "10px", overflow: "hidden", border: "1px solid #1e3a6e", background: "#111827", display: "flex", justifyContent: "center", padding: "16px" }}>
             <iframe
               src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2F6633ArcticUltra%2F&tabs=timeline&width=500&height=600&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=false"
-              width="500"
+              width="100%"
               height="600"
-              style={{ border: "none", overflow: "hidden", maxWidth: "100%" }}
+              style={{ border: "none", overflow: "hidden", maxWidth: "500px", display: "block" }}
               scrolling="no"
               allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
             />
