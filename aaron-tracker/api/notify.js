@@ -1,4 +1,41 @@
 import { readFile, writeFile } from "./github-store.js";
+import webPush from "web-push";
+
+// Configure VAPID once at module level (cold-start safe)
+if (process.env.VAPID_PUBLIC_KEY) {
+  webPush.setVapidDetails(
+    (process.env.VAPID_SUBJECT || "mailto:admin@trackanaaron.vercel.app").trim(),
+    process.env.VAPID_PUBLIC_KEY.trim(),
+    process.env.VAPID_PRIVATE_KEY.trim()
+  );
+}
+
+async function sendWebPush(title, body) {
+  const { data: subs, sha } = await readFile("data/push-subscriptions.json");
+  const list = subs || [];
+  if (list.length === 0) return { sent: 0, removed: 0 };
+
+  const payload = JSON.stringify({ title, body, url: SITE_URL });
+  const results = await Promise.allSettled(
+    list.map((sub) => webPush.sendNotification(sub, payload))
+  );
+
+  // Collect gone (404/410) endpoints to prune from storage
+  const gone = new Set();
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      const code = r.reason?.statusCode;
+      if (code === 404 || code === 410) gone.add(list[i].endpoint);
+    }
+  });
+
+  if (gone.size > 0) {
+    const pruned = list.filter((s) => !gone.has(s.endpoint));
+    try { await writeFile("data/push-subscriptions.json", pruned, sha); } catch {}
+  }
+
+  return { sent: results.filter((r) => r.status === "fulfilled").length, removed: gone.size };
+}
 
 const SITE_URL = "https://trackanaaron.vercel.app";
 const ATHLETE_NAME = "Aaron Rabinowitz";
@@ -221,12 +258,17 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: emailRes.ok, test: true, to: testEmail });
     }
 
-    // Get subscribers
+    // Send Web Push to all subscribed browsers (independent of email list)
+    const pct = ((parseFloat(data.routeMile) || 0) / TOTAL_MILES * 100).toFixed(1);
+    const pushTitle = type === "morning" ? `☀️ Morning Update — Aaron` : `🌙 Evening Update — Aaron`;
+    const pushBody = `Mile ${data.routeMile || "?"} of ${TOTAL_MILES} · ${pct}% complete`;
+    const pushResult = await sendWebPush(pushTitle, pushBody).catch(() => ({ sent: 0, removed: 0 }));
+
+    // Get subscribers and send emails
     const { data: subscribers } = await readFile("data/subscribers.json");
     const list = subscribers || [];
-    if (list.length === 0) return res.status(200).json({ ok: true, sent: 0 });
+    if (list.length === 0) return res.status(200).json({ ok: true, sent: 0, pushSent: pushResult.sent });
 
-    // Send emails
     let sent = 0;
     for (const email of list) {
       const { subject, html: htmlBody } = buildEmail(data, type, email, { dayMiles, journalEntries });
@@ -246,7 +288,7 @@ export default async function handler(req, res) {
       if (emailRes.ok) sent++;
     }
 
-    return res.status(200).json({ ok: true, sent, total: list.length });
+    return res.status(200).json({ ok: true, sent, total: list.length, pushSent: pushResult.sent, pushRemoved: pushResult.removed });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

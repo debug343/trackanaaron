@@ -1,0 +1,23 @@
+{
+  "name": "Track Aaron — 6633 Northern Lights Ultra",
+  "short_name": "Track Aaron",
+  "description": "Live race tracker for Aaron Rabinowitz's 170.8-mile Arctic ultra.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e1a",
+  "theme_color": "#1a5fc8",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,5 +1,23 @@
 import { useState, useEffect } from "react";
 
+// ── Web Push helpers ──────────────────────────────────────────────────────────
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+}
+function urlBase64ToUint8Array(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const base64 = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
 const ATHLETE_NAME = "Aaron Rabinowitz";
 const RACE_NAME = "6633 Northern Lights Ultra";
 const TOTAL_MILES = 170.8;
@@ -255,6 +273,10 @@ export default function AaronTracker() {
 
   const [shareCopied, setShareCopied] = useState(false);
 
+  const [notifState, setNotifState] = useState("loading"); // loading|unsupported|ios-not-installed|denied|prompt|granted
+  const [vapidPublicKey, setVapidPublicKey] = useState(null);
+  const [pushSubscription, setPushSubscription] = useState(null);
+
   const [comments, setComments] = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentName, setCommentName] = useState("");
@@ -272,6 +294,36 @@ export default function AaronTracker() {
     fetchJournal();
     fetchLiveData();
     fetchComments();
+
+    // Web Push init
+    (async () => {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        return setNotifState("unsupported");
+      }
+      if (isIOS() && !isStandalone()) {
+        return setNotifState("ios-not-installed");
+      }
+      if (Notification.permission === "denied") {
+        return setNotifState("denied");
+      }
+      try {
+        const keyRes = await fetch("/api/vapid-public-key");
+        const { key } = await keyRes.json();
+        if (!key) return setNotifState("unsupported");
+        setVapidPublicKey(key);
+        const reg = await navigator.serviceWorker.register("/sw.js");
+        await navigator.serviceWorker.ready;
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+          setPushSubscription(existing);
+          setNotifState("granted");
+        } else {
+          setNotifState("prompt");
+        }
+      } catch {
+        setNotifState("unsupported");
+      }
+    })();
   }, []);
 
   async function fetchLiveData() {
@@ -415,6 +467,44 @@ export default function AaronTracker() {
       setSendStatus(res.ok ? (test ? `Test sent to ${data.to}` : `Sent to ${data.sent} subscriber${data.sent !== 1 ? "s" : ""}`) : data.error || "Failed");
     } catch { setSendStatus("Network error"); }
     setSendingUpdate(false);
+  }
+
+  async function handleEnableNotifications() {
+    if (!vapidPublicKey) return;
+    setNotifState("loading");
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") { setNotifState("denied"); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
+      await fetch("/api/push-subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sub.toJSON()),
+      });
+      setPushSubscription(sub);
+      setNotifState("granted");
+    } catch {
+      setNotifState(Notification.permission === "denied" ? "denied" : "prompt");
+    }
+  }
+
+  async function handleDisableNotifications() {
+    if (!pushSubscription) return;
+    try {
+      const endpoint = pushSubscription.endpoint;
+      await pushSubscription.unsubscribe();
+      await fetch("/api/push-subscribe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint }),
+      });
+      setPushSubscription(null);
+      setNotifState("prompt");
+    } catch {}
   }
 
   async function fetchComments() {
@@ -942,6 +1032,66 @@ export default function AaronTracker() {
             />
           </div>
         </div>
+
+        {/* ── PUSH NOTIFICATIONS ── */}
+        {notifState !== "unsupported" && notifState !== "loading" && (
+          <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #0a0e1a)", marginBottom: "16px" }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: "18px", fontWeight: "normal", color: "#fff" }}>🔔 Browser Notifications</h2>
+
+            {notifState === "ios-not-installed" && (
+              <>
+                <p style={{ margin: "0 0 14px", color: "#4a7aaa", fontSize: "14px", lineHeight: "1.7" }}>
+                  To get push notifications on your iPhone, add this page to your Home Screen first:
+                </p>
+                <ol style={{ margin: "0 0 16px", padding: "0 0 0 20px", color: "#7a9cc8", fontSize: "14px", lineHeight: "2.2" }}>
+                  <li>Open this page in <strong style={{ color: "#fff" }}>Safari</strong></li>
+                  <li>Tap the <strong style={{ color: "#fff" }}>Share</strong> button (the box with an arrow ↑)</li>
+                  <li>Tap <strong style={{ color: "#fff" }}>Add to Home Screen</strong></li>
+                  <li>Open the app from your Home Screen, then enable notifications here</li>
+                </ol>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(74,158,255,0.08)", border: "1px solid #1e3a6e", borderRadius: "8px", padding: "10px 16px" }}>
+                  <span style={{ fontSize: "20px" }}>📲</span>
+                  <span style={{ fontSize: "13px", color: "#4a9eff" }}>Add to Home Screen to unlock notifications</span>
+                </div>
+              </>
+            )}
+
+            {notifState === "denied" && (
+              <>
+                <p style={{ margin: "0 0 12px", color: "#ff8080", fontSize: "14px", lineHeight: "1.6" }}>
+                  Notifications are blocked. To re-enable, open your browser settings, find this site under Site Permissions, and allow notifications.
+                </p>
+                <span style={{ fontSize: "13px", color: "#4a4a6a" }}>Notifications Blocked</span>
+              </>
+            )}
+
+            {notifState === "prompt" && (
+              <>
+                <p style={{ margin: "0 0 14px", color: "#4a7aaa", fontSize: "14px", lineHeight: "1.6" }}>
+                  Get a push notification whenever morning and evening updates are sent — no email needed.
+                </p>
+                <button onClick={handleEnableNotifications} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 24px", fontSize: "15px", cursor: "pointer", letterSpacing: "1px", minHeight: "48px" }}>
+                  Enable Notifications
+                </button>
+              </>
+            )}
+
+            {notifState === "loading" && (
+              <p style={{ margin: 0, color: "#4a7aaa", fontSize: "14px" }}>Setting up notifications...</p>
+            )}
+
+            {notifState === "granted" && (
+              <>
+                <p style={{ margin: "0 0 14px", color: "#00c896", fontSize: "14px", lineHeight: "1.6" }}>
+                  ✓ You'll receive a push notification when Aaron's updates are sent.
+                </p>
+                <button onClick={handleDisableNotifications} style={{ background: "none", border: "1px solid #2a4a6a", color: "#4a7aaa", borderRadius: "6px", padding: "10px 18px", fontSize: "13px", cursor: "pointer", minHeight: "44px" }}>
+                  Turn Off Notifications
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* ── SUBSCRIBE ── */}
         <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #0a0e1a)" }}>
