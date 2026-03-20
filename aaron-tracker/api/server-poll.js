@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "./github-store.js";
+import { readFile, writeFile } from "./_github-store.js";
 import webPush from "web-push";
 
 if (process.env.VAPID_PUBLIC_KEY) {

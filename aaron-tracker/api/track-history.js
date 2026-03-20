@@ -1,4 +1,4 @@
-import { readFile } from "./github-store.js";
+import { readFile } from "./_github-store.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).end();
