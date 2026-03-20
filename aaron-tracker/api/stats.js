@@ -36,9 +36,10 @@ export default async function handler(req, res) {
 
       // Rest mode fields (only update if key present in body)
       if ("restMode" in (req.body || {})) {
-        updated.restMode  = !!restMode;
-        updated.restNote  = restNote || "";
-        updated.restSince = restMode ? new Date().toISOString() : null;
+        updated.restMode   = !!restMode;
+        updated.restNote   = restNote || "";
+        updated.restSince  = restMode ? new Date().toISOString() : null;
+        updated.restAtMile = restMode ? (state?.lastMile ?? null) : null;
       }
 
       // Race update field

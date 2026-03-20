@@ -114,15 +114,45 @@ export default async function handler(req, res) {
       return res.status(200).json({ pushed: false, reason: "no_movement", currentMile: routeMile, lastMile });
     }
 
-    // 3b. Rest mode — record position to history but suppress push notification
+    // 3b. Rest mode — suppress push unless Aaron has moved ≥1 mile (auto-resume)
     if (inRestMode) {
+      const restAtMile = state?.restAtMile ?? null;
+      const autoResumed = restAtMile !== null && Math.abs(routeMile - restAtMile) >= 1.0;
+
+      if (!autoResumed) {
+        // Still resting — record history, skip push
+        const points = histPoints || [];
+        points.push({ t: now.toISOString(), m: routeMile, sp: parsed.currentSpeed || null, avg: parsed.movingAvgSpeed || null, st: parsed.status || null });
+        await Promise.all([
+          writeFile("data/track-history.json", points, histSha),
+          writeFile("data/notify-state.json", { ...(state || {}), lastMile: routeMile, updatedAt: now.toISOString() }, stateSha),
+        ]);
+        return res.status(200).json({ pushed: false, reason: "rest_mode", historyRecorded: true, mile: routeMile });
+      }
+
+      // Auto-resume: Aaron has moved — clear rest mode and fall through to send push
+      const pct = ((routeMile / TOTAL_MILES) * 100).toFixed(1);
+      const next = getNextCheckpoint(routeMile);
+      const locationStr = next ? `${(next.mile - routeMile).toFixed(1)} mi to ${next.name}` : "approaching finish 🏁";
+      const speedStr   = parsed.movingAvgSpeed ? ` · avg ${parsed.movingAvgSpeed}` : "";
+      const currentStr = parsed.currentSpeed   ? ` · now ${parsed.currentSpeed}`   : "";
+      const title = "🏃 Aaron is back on the trail!";
+      const body  = `Mile ${routeMile.toFixed(1)} · ${pct}% · ${locationStr}${speedStr}${currentStr}`;
+
       const points = histPoints || [];
       points.push({ t: now.toISOString(), m: routeMile, sp: parsed.currentSpeed || null, avg: parsed.movingAvgSpeed || null, st: parsed.status || null });
+
+      const pushResult = await sendWebPush(title, body);
       await Promise.all([
         writeFile("data/track-history.json", points, histSha),
-        writeFile("data/notify-state.json", { ...(state || {}), lastMile: routeMile, updatedAt: now.toISOString() }, stateSha),
+        writeFile("data/notify-state.json", {
+          ...(state || {}),
+          restMode: false, restNote: "", restSince: null, restAtMile: null,
+          lastMile: routeMile, updatedAt: now.toISOString(),
+          lastAutoPushMile: routeMile, lastAutoPushAt: now.toISOString(),
+        }, stateSha),
       ]);
-      return res.status(200).json({ pushed: false, reason: "rest_mode", historyRecorded: true, mile: routeMile });
+      return res.status(200).json({ pushed: true, autoResumed: true, sent: pushResult.sent, mile: routeMile, body });
     }
 
     // 4. Append data point to track history
