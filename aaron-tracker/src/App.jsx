@@ -300,9 +300,11 @@ function ElevationProfile({ currentMile, dailyStats = [], otherAthletes = [], sc
       {/* Aaron's position */}
       {curElev !== null && (
         <g>
-          <line x1={toX(currentMile)} y1={padT} x2={toX(currentMile)} y2={base} stroke="#00c896" strokeWidth="1" strokeDasharray="2 2" strokeOpacity="0.5" />
-          <text x={toX(currentMile)} y={toY(curElev) + 4} textAnchor="middle" fill="#00c896" fontSize="14" fontFamily="sans-serif">▲</text>
-          <text x={toX(currentMile)} y={toY(curElev) - 7} textAnchor="middle" fill="#00c896" fontSize="9" fontFamily="Georgia,serif">Aaron · {parseFloat(currentMile).toFixed(1)}mi</text>
+          <line x1={toX(currentMile)} y1={padT} x2={toX(currentMile)} y2={base} stroke="#00c896" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.7" />
+          <circle cx={toX(currentMile)} cy={toY(curElev)} r="7" fill="#00c896" fillOpacity="0.18" stroke="#00c896" strokeWidth="1.5" />
+          <text x={toX(currentMile)} y={toY(curElev) + 6} textAnchor="middle" fill="#00c896" fontSize="18" fontFamily="sans-serif">▲</text>
+          <text x={toX(currentMile)} y={toY(curElev) - 14} textAnchor="middle" fill="#00c896" fontSize="11" fontFamily="Georgia,serif" fontWeight="bold">Aaron</text>
+          <text x={toX(currentMile)} y={toY(curElev) - 3} textAnchor="middle" fill="#00c896" fontSize="9" fontFamily="Georgia,serif" opacity="0.85">{parseFloat(currentMile).toFixed(1)}mi</text>
         </g>
       )}
     </svg>
@@ -928,7 +930,7 @@ export default function AaronTracker() {
               otherAthletes={leaderboard?.athletes
                 ? leaderboard.athletes.filter((_, i) => i !== (leaderboard.aaronRank - 1))
                 : []}
-              scratchedAthletes={leaderboard?.scratchedAthletes || []}
+              scratchedAthletes={(leaderboard?.scratchedAthletes || []).filter(a => !a.name.toLowerCase().includes("aaron"))}
             />
           </div>
         </div>
