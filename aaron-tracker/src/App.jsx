@@ -427,7 +427,7 @@ export default function AaronTracker() {
         fetch("/api/auto-push", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ routeMile: parsed.routeMile }),
+          body: JSON.stringify({ routeMile: parsed.routeMile, movingAvgSpeed: parsed.movingAvgSpeed }),
         }).catch(() => {});
       }
     } catch (e) {

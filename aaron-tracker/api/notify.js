@@ -261,7 +261,10 @@ export default async function handler(req, res) {
     // Send Web Push to all subscribed browsers (independent of email list)
     const pct = ((parseFloat(data.routeMile) || 0) / TOTAL_MILES * 100).toFixed(1);
     const pushTitle = type === "morning" ? `☀️ Morning Update — Aaron` : `🌙 Evening Update — Aaron`;
-    const pushBody = `Mile ${data.routeMile || "?"} of ${TOTAL_MILES} · ${pct}% complete`;
+    const nextStage = getNextStage(data.routeMile);
+    const locationStr = nextStage ? `${nextStage.remaining} mi to ${nextStage.to}` : "approaching finish";
+    const speedStr = data.movingAvgSpeed ? ` · ${data.movingAvgSpeed} avg` : "";
+    const pushBody = `Mile ${data.routeMile || "?"} · ${pct}% done · ${locationStr}${speedStr}`;
     const pushResult = await sendWebPush(pushTitle, pushBody).catch(() => ({ sent: 0, removed: 0 }));
 
     // Get subscribers and send emails

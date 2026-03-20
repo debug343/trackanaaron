@@ -12,8 +12,24 @@ if (process.env.VAPID_PUBLIC_KEY) {
 
 const SITE_URL = "https://trackanaaron.vercel.app";
 const TOTAL_MILES = 170.8;
-const MIN_MILE_DELTA = 0.5;            // only push if Aaron moved >= 0.5 miles
-const MIN_PUSH_INTERVAL_MS = 25 * 60 * 1000; // at least 25 min between auto-pushes
+const MIN_MILE_DELTA = 0.5;
+const MIN_PUSH_INTERVAL_MS = 25 * 60 * 1000;
+
+const CHECKPOINTS = [
+  { name: "Eagle Plains", mile: 0 },
+  { name: "Fort McPherson", mile: 30 },
+  { name: "Peel River", mile: 64 },
+  { name: "Aklavik", mile: 92 },
+  { name: "Camp 4", mile: 154 },
+  { name: "Inuvik", mile: 170.8 },
+];
+
+function getNextCheckpoint(mile) {
+  for (const cp of CHECKPOINTS) {
+    if (cp.mile > mile) return cp;
+  }
+  return null;
+}
 
 async function sendWebPush(title, body) {
   const { data: subs, sha } = await readFile("data/push-subscriptions.json");
@@ -64,8 +80,12 @@ export default async function handler(req, res) {
     }
 
     const pct = ((routeMile / TOTAL_MILES) * 100).toFixed(1);
+    const next = getNextCheckpoint(routeMile);
+    const locationStr = next ? `${(next.mile - routeMile).toFixed(1)} mi to ${next.name}` : "approaching finish 🏁";
+    const movingAvgSpeed = req.body?.movingAvgSpeed;
+    const speedStr = movingAvgSpeed ? ` · ${movingAvgSpeed} avg` : "";
     const title = "🏃 Aaron Update";
-    const body = `Mile ${routeMile.toFixed(1)} of ${TOTAL_MILES} · ${pct}% complete`;
+    const body = `Mile ${routeMile.toFixed(1)} · ${pct}% · ${locationStr}${speedStr}`;
 
     const pushResult = await sendWebPush(title, body);
 
