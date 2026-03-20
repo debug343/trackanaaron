@@ -239,6 +239,45 @@ const statLabel = { fontSize: "10px", color: "#4a6a8a", letterSpacing: "2px", te
 // fontSize 16px is required to prevent iOS Safari auto-zoom on input focus
 const inputStyle = { background: "#111827", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#e8eaf6", padding: "10px 14px", fontSize: "16px", fontFamily: "inherit" };
 
+// ── Race progress helpers ────────────────────────────────────────────────────
+function parseSpeedMph(speedStr) {
+  if (!speedStr) return null;
+  const m = parseFloat(speedStr);
+  if (isNaN(m) || m <= 0) return null;
+  return speedStr.toLowerCase().includes("km") ? m * 0.621371 : m;
+}
+
+function getNextCampInfo(mile, movingAvgSpeed) {
+  if (mile === null) return null;
+  let next = null;
+  for (const cp of CHECKPOINTS) {
+    if (cp.mile > mile) { next = cp; break; }
+  }
+  if (!next) return null;
+  const remaining = next.mile - mile;
+  const speed = parseSpeedMph(movingAvgSpeed);
+  const eta = (speed && speed > 0.1)
+    ? new Date(Date.now() + (remaining / speed) * 3600000)
+    : null;
+  return { name: next.name, remaining: remaining.toFixed(1), eta };
+}
+
+function formatTimeUntil(date) {
+  if (!date) return null;
+  const mins = Math.round((date - new Date()) / 60000);
+  if (mins <= 0) return null;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function formatCountdown(secs) {
+  if (secs === null || secs === undefined) return "";
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export default function AaronTracker() {
   const [liveData, setLiveData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -272,6 +311,7 @@ export default function AaronTracker() {
   const [subLoading, setSubLoading] = useState(false);
 
   const [shareCopied, setShareCopied] = useState(false);
+  const [nextRefreshIn, setNextRefreshIn] = useState(null); // seconds until next auto-refresh
 
   const [notifState, setNotifState] = useState("loading"); // loading|unsupported|ios-not-installed|denied|prompt|granted
   const [vapidPublicKey, setVapidPublicKey] = useState(null);
@@ -324,9 +364,25 @@ export default function AaronTracker() {
         setNotifState("unsupported");
       }
     })();
+
+    // Auto-refresh live data every 11 minutes; call auto-push after each refresh
+    const REFRESH_MS = 11 * 60 * 1000;
+    setNextRefreshIn(REFRESH_MS / 1000);
+    const refreshInterval = setInterval(() => {
+      fetchLiveData(true);
+      setNextRefreshIn(REFRESH_MS / 1000);
+    }, REFRESH_MS);
+    const countdownInterval = setInterval(() => {
+      setNextRefreshIn((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
+    }, 1000);
+
+    return () => {
+      clearInterval(refreshInterval);
+      clearInterval(countdownInterval);
+    };
   }, []);
 
-  async function fetchLiveData() {
+  async function fetchLiveData(autoPush = false) {
     setLoading(true);
     setError(null);
     try {
@@ -338,14 +394,15 @@ export default function AaronTracker() {
         throw new Error("Page loaded but no stats found. The race may not have started yet.");
       setLiveData(parsed);
       setLastFetched(new Date().toLocaleString());
-      // Fetch weather for Aaron's current location
+      // Fetch weather + sunset time for Aaron's current location
       try {
         const [lat, lng] = getRouteCoords(parsed.routeMile);
-        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=temperature_2m,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`);
+        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=temperature_2m,weather_code,wind_speed_10m&daily=sunrise,sunset&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`);
         const wJson = await wRes.json();
         const c = wJson.current;
         const { icon, desc } = describeWeather(c.weather_code);
-        setWeather({ tempF: Math.round(c.temperature_2m), tempC: Math.round((c.temperature_2m - 32) * 5 / 9), windMph: Math.round(c.wind_speed_10m), icon, desc });
+        const sunsetStr = wJson.daily?.sunset?.[0] ?? null;
+        setWeather({ tempF: Math.round(c.temperature_2m), tempC: Math.round((c.temperature_2m - 32) * 5 / 9), windMph: Math.round(c.wind_speed_10m), icon, desc, sunsetAt: sunsetStr ? new Date(sunsetStr) : null });
       } catch {}
       // Fetch leaderboard
       try {
@@ -353,6 +410,14 @@ export default function AaronTracker() {
         const lJson = await lRes.json();
         setLeaderboard(lJson);
       } catch {}
+      // Auto-push notification if position changed (rate-limited server-side)
+      if (autoPush && parsed.routeMile) {
+        fetch("/api/auto-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ routeMile: parsed.routeMile }),
+        }).catch(() => {});
+      }
     } catch (e) {
       setError(e.message || "Could not fetch live data.");
     }
@@ -690,7 +755,10 @@ export default function AaronTracker() {
               {loading ? "⟳ Refreshing..." : "↻ Refresh"}
             </button>
           </div>
-          {lastFetched && <div style={{ color: "#4a7aaa", fontSize: "11px", marginBottom: "16px" }}>Last fetched: {lastFetched}</div>}
+          <div style={{ color: "#4a7aaa", fontSize: "11px", marginBottom: "16px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {lastFetched && <span>Last fetched: {lastFetched}</span>}
+            {nextRefreshIn !== null && <span style={{ color: "#2a4a5a" }}>Auto-refresh in {formatCountdown(nextRefreshIn)}</span>}
+          </div>
           {error && <div style={{ background: "#1a0a0a", border: "1px solid #5a1a1a", borderRadius: "8px", padding: "16px", marginBottom: "16px", color: "#ff8080", fontSize: "14px" }}>⚠ {error}</div>}
 
           {!liveData && !loading && !error && (
@@ -725,16 +793,46 @@ export default function AaronTracker() {
                 <div style={statLabel}>Current Speed</div>
                 <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.currentSpeed || "—"}</div>
               </div>
-              {/* 3. Temperature */}
+              {/* 3. Conditions + Sunset */}
               {weather && (
                 <div style={card}>
                   <div style={statLabel}>Conditions at Location</div>
                   <div style={{ fontSize: "20px", marginBottom: "2px" }}>{weather.icon}</div>
                   <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{weather.tempF}°F / {weather.tempC}°C</div>
                   <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "2px" }}>{weather.desc} · {weather.windMph} mph wind</div>
+                  {weather.sunsetAt && (() => {
+                    const sunsetTime = weather.sunsetAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+                    const until = formatTimeUntil(weather.sunsetAt);
+                    return (
+                      <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "6px", borderTop: "1px solid #1e2a4e", paddingTop: "6px" }}>
+                        🌅 Sunset {sunsetTime}{until ? <span style={{ color: "#7a9cc8" }}> · in {until}</span> : null}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
-              {/* 4. Current Elevation */}
+              {/* 4-5. Next Camp + Est. Arrival */}
+              {mile !== null && (() => {
+                const nc = getNextCampInfo(mile, liveData.movingAvgSpeed);
+                if (!nc) return null;
+                const arrivalTime = nc.eta ? nc.eta.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : null;
+                const until = nc.eta ? formatTimeUntil(nc.eta) : null;
+                return (<>
+                  <div style={card}>
+                    <div style={statLabel}>Next Camp</div>
+                    <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{nc.remaining} mi</div>
+                    <div style={{ fontSize: "11px", color: "#7a9cc8", marginTop: "2px" }}>{nc.name.split(" /")[0].split("–")[0].trim()}</div>
+                  </div>
+                  {arrivalTime && (
+                    <div style={card}>
+                      <div style={statLabel}>Est. Arrival</div>
+                      <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{arrivalTime}</div>
+                      {until && <div style={{ fontSize: "11px", color: "#7a9cc8", marginTop: "2px" }}>in {until}</div>}
+                    </div>
+                  )}
+                </>);
+              })()}
+              {/* 6. Current Elevation */}
               <div style={card}>
                 <div style={statLabel}>Current Elevation</div>
                 <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.currentElevation || "—"}</div>
