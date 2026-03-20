@@ -161,7 +161,7 @@ function interpolateElev(mile) {
   return null;
 }
 
-function ElevationProfile({ currentMile, dailyStats = [], otherAthletes = [] }) {
+function ElevationProfile({ currentMile, dailyStats = [], otherAthletes = [], scratchedAthletes = [] }) {
   const W = 860, H = 210, padL = 34, padR = 10, padT = 46, padB = 48;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const maxElev = 85;
@@ -275,6 +275,27 @@ function ElevationProfile({ currentMile, dailyStats = [], otherAthletes = [] }) 
           );
         });
       })()}
+
+      {/* Scratched athletes — ✕ at their last known position */}
+      {scratchedAthletes
+        .map(a => ({ ...a, m: parseFloat(a.routeMile) }))
+        .filter(a => !isNaN(a.m) && a.m >= 0 && a.m <= 170.8)
+        .map((a, i) => {
+          const x = toX(a.m);
+          const elev = interpolateElev(a.m) ?? 0;
+          const y = toY(elev);
+          const firstName = a.name.split(" ")[0];
+          const labelY = y - 14 - (i % 2) * 10;
+          return (
+            <g key={a.name} opacity="0.55">
+              <line x1={x - 5} y1={y - 5} x2={x + 5} y2={y + 5} stroke="#ff4444" strokeWidth="2" strokeLinecap="round" />
+              <line x1={x + 5} y1={y - 5} x2={x - 5} y2={y + 5} stroke="#ff4444" strokeWidth="2" strokeLinecap="round" />
+              <text x={x} y={labelY} textAnchor="middle" fill="#ff6666" fontSize="8" fontFamily="Georgia,serif">{firstName}</text>
+              <text x={x} y={labelY + 9} textAnchor="middle" fill="#ff6666" fontSize="7.5" fontFamily="Georgia,serif">{a.m.toFixed(1)}mi</text>
+            </g>
+          );
+        })
+      }
 
       {/* Aaron's position */}
       {curElev !== null && (
@@ -897,6 +918,21 @@ export default function AaronTracker() {
           </div>
         )}
 
+        {/* ── ELEVATION ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Course Elevation Profile</div>
+          <div style={{ ...card, padding: "16px 12px 8px" }}>
+            <ElevationProfile
+              currentMile={mile}
+              dailyStats={dailyStatsList}
+              otherAthletes={leaderboard?.athletes
+                ? leaderboard.athletes.filter((_, i) => i !== (leaderboard.aaronRank - 1))
+                : []}
+              scratchedAthletes={leaderboard?.scratchedAthletes || []}
+            />
+          </div>
+        </div>
+
         {/* ── ABOUT ── */}
         <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>What is he up to now?!</div>
@@ -918,20 +954,6 @@ export default function AaronTracker() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* ── ELEVATION ── */}
-        <div style={{ marginBottom: "40px" }}>
-          <div style={sectionTitle}>Course Elevation Profile</div>
-          <div style={{ ...card, padding: "16px 12px 8px" }}>
-            <ElevationProfile
-              currentMile={mile}
-              dailyStats={dailyStatsList}
-              otherAthletes={leaderboard?.athletes
-                ? leaderboard.athletes.filter((_, i) => i !== (leaderboard.aaronRank - 1))
-                : []}
-            />
           </div>
         </div>
 

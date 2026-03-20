@@ -37,11 +37,15 @@ export default async function handler(req, res) {
     const active = athletes.filter((a) => a.status === "Active");
     active.sort((a, b) => b.routeMile - a.routeMile);
 
+    const scratchedAthletes = athletes
+      .filter((a) => a.status !== "Active")
+      .sort((a, b) => b.routeMile - a.routeMile);
+
     const aaronIdx = active.findIndex(
       (a) => a.name.toLowerCase().includes("aaron") && a.name.toLowerCase().includes("rabinowitz")
     );
 
-    return res.status(200).json({ athletes: active, aaronRank: aaronIdx + 1, total, scratched, remaining: active.length });
+    return res.status(200).json({ athletes: active, scratchedAthletes, aaronRank: aaronIdx + 1, total, scratched, remaining: active.length });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
