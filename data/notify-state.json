@@ -5,7 +5,7 @@
   "dayStartDate": "2026-03-20",
   "lastAutoPushMile": 66.4,
   "lastAutoPushAt": "2026-03-20T05:50:55.994Z",
-  "restMode": true,
-  "restNote": "Sleeping at Peel River checkpoint",
-  "restSince": "2026-03-20T14:03:12.581Z"
+  "restMode": false,
+  "restNote": "",
+  "restSince": null
 }
