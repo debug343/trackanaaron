@@ -1146,55 +1146,80 @@ export default function AaronTracker() {
         {/* ── PUSH NOTIFICATIONS ── */}
         {notifState !== "unsupported" && notifState !== "loading" && (
           <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #0a0e1a)", marginBottom: "16px" }}>
-            <h2 style={{ margin: "0 0 8px", fontSize: "18px", fontWeight: "normal", color: "#fff" }}>🔔 Browser Notifications</h2>
+            <h2 style={{ margin: "0 0 4px", fontSize: "18px", fontWeight: "normal", color: "#fff" }}>🔔 Get Notified</h2>
 
             {notifState === "ios-not-installed" && (
               <>
-                <p style={{ margin: "0 0 14px", color: "#4a7aaa", fontSize: "14px", lineHeight: "1.7" }}>
-                  To get push notifications on your iPhone, add this page to your Home Screen first:
+                <p style={{ margin: "0 0 16px", color: "#4a7aaa", fontSize: "13px", lineHeight: "1.6" }}>
+                  iPhone requires adding this page to your Home Screen before notifications work (iOS 16.4+, Safari only).
                 </p>
-                <ol style={{ margin: "0 0 16px", padding: "0 0 0 20px", color: "#7a9cc8", fontSize: "14px", lineHeight: "2.2" }}>
-                  <li>Open this page in <strong style={{ color: "#fff" }}>Safari</strong></li>
-                  <li>Tap the <strong style={{ color: "#fff" }}>Share</strong> button (the box with an arrow ↑)</li>
-                  <li>Tap <strong style={{ color: "#fff" }}>Add to Home Screen</strong></li>
-                  <li>Open the app from your Home Screen, then enable notifications here</li>
-                </ol>
-                <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(74,158,255,0.08)", border: "1px solid #1e3a6e", borderRadius: "8px", padding: "10px 16px" }}>
-                  <span style={{ fontSize: "20px" }}>📲</span>
-                  <span style={{ fontSize: "13px", color: "#4a9eff" }}>Add to Home Screen to unlock notifications</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+                  {[
+                    ["1", "Safari", "Open this page in Safari (not Chrome)"],
+                    ["2", "↑ Share", "Tap the Share button in the bottom toolbar"],
+                    ["3", "Add to Home Screen", "Scroll down and tap Add to Home Screen"],
+                    ["4", "Open & Enable", "Open the app from your Home Screen, then tap Enable Notifications here"],
+                  ].map(([num, label, desc]) => (
+                    <div key={num} style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                      <div style={{ flexShrink: 0, width: "24px", height: "24px", borderRadius: "50%", background: "#1a3a6e", border: "1px solid #2a5aae", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", color: "#4a9eff", fontWeight: "bold", marginTop: "1px" }}>{num}</div>
+                      <div>
+                        <div style={{ fontSize: "13px", color: "#fff", fontWeight: "600", marginBottom: "1px" }}>{label}</div>
+                        <div style={{ fontSize: "12px", color: "#4a7aaa", lineHeight: "1.5" }}>{desc}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+                <div style={{ fontSize: "11px", color: "#2a4a6a" }}>Works on iPhone and iPad · Requires iOS 16.4+</div>
               </>
             )}
 
             {notifState === "denied" && (
               <>
-                <p style={{ margin: "0 0 12px", color: "#ff8080", fontSize: "14px", lineHeight: "1.6" }}>
-                  Notifications are blocked. To re-enable, open your browser settings, find this site under Site Permissions, and allow notifications.
+                <p style={{ margin: "0 0 12px", color: "#ff8080", fontSize: "13px", lineHeight: "1.6" }}>
+                  Notifications are blocked for this site. To re-enable:
                 </p>
-                <span style={{ fontSize: "13px", color: "#4a4a6a" }}>Notifications Blocked</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "13px", color: "#7a9cc8" }}>
+                    <strong style={{ color: "#c8d4f0" }}>Chrome / Edge:</strong> Tap the 🔒 lock icon in the address bar → Site settings → Notifications → Allow
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#7a9cc8" }}>
+                    <strong style={{ color: "#c8d4f0" }}>Firefox:</strong> Tap the shield icon → Connection Secure → More Information → Permissions → Notifications → Allow
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#7a9cc8" }}>
+                    <strong style={{ color: "#c8d4f0" }}>Safari (Mac):</strong> Safari menu → Settings for This Website → Notifications → Allow
+                  </div>
+                </div>
+                <div style={{ fontSize: "11px", color: "#4a4a6a" }}>Then reload this page</div>
               </>
             )}
 
             {notifState === "prompt" && (
               <>
-                <p style={{ margin: "0 0 14px", color: "#4a7aaa", fontSize: "14px", lineHeight: "1.6" }}>
-                  Get a push notification whenever morning and evening updates are sent — no email needed.
+                <p style={{ margin: "0 0 6px", color: "#4a7aaa", fontSize: "13px", lineHeight: "1.6" }}>
+                  Receive push alerts directly in your browser — no app or email needed.
                 </p>
-                <button onClick={handleEnableNotifications} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 24px", fontSize: "15px", cursor: "pointer", letterSpacing: "1px", minHeight: "48px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "16px" }}>
+                  {["Morning & evening race updates", "Auto-alerts when Aaron's position changes", "Milestone & checkpoint notifications"].map((item) => (
+                    <div key={item} style={{ fontSize: "12px", color: "#4a6a8a" }}>· {item}</div>
+                  ))}
+                </div>
+                <button onClick={handleEnableNotifications} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 28px", fontSize: "15px", cursor: "pointer", letterSpacing: "1px", minHeight: "48px", display: "block", marginBottom: "10px" }}>
                   Enable Notifications
                 </button>
+                <div style={{ fontSize: "11px", color: "#2a4a6a" }}>Works in Chrome, Firefox, Edge, and Safari on Mac · No sign-up required</div>
               </>
-            )}
-
-            {notifState === "loading" && (
-              <p style={{ margin: 0, color: "#4a7aaa", fontSize: "14px" }}>Setting up notifications...</p>
             )}
 
             {notifState === "granted" && (
               <>
-                <p style={{ margin: "0 0 14px", color: "#00c896", fontSize: "14px", lineHeight: "1.6" }}>
-                  ✓ You'll receive a push notification when Aaron's updates are sent.
+                <p style={{ margin: "0 0 6px", color: "#00c896", fontSize: "13px", lineHeight: "1.6" }}>
+                  ✓ Notifications active — you'll be alerted for updates and when Aaron moves.
                 </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "14px" }}>
+                  {["Morning & evening race updates", "Auto-alerts when Aaron's position changes"].map((item) => (
+                    <div key={item} style={{ fontSize: "12px", color: "#2a6a4a" }}>· {item}</div>
+                  ))}
+                </div>
                 <button onClick={handleDisableNotifications} style={{ background: "none", border: "1px solid #2a4a6a", color: "#4a7aaa", borderRadius: "6px", padding: "10px 18px", fontSize: "13px", cursor: "pointer", minHeight: "44px" }}>
                   Turn Off Notifications
                 </button>
