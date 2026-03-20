@@ -394,11 +394,11 @@ export default function AaronTracker() {
       }
     })();
 
-    // Auto-refresh live data every 11 minutes; call auto-push after each refresh
+    // Auto-refresh live data every 11 minutes
     const REFRESH_MS = 11 * 60 * 1000;
     setNextRefreshIn(REFRESH_MS / 1000);
     const refreshInterval = setInterval(() => {
-      fetchLiveData(true);
+      fetchLiveData();
       setNextRefreshIn(REFRESH_MS / 1000);
     }, REFRESH_MS);
     const countdownInterval = setInterval(() => {
@@ -411,7 +411,7 @@ export default function AaronTracker() {
     };
   }, []);
 
-  async function fetchLiveData(autoPush = false) {
+  async function fetchLiveData() {
     setLoading(true);
     setError(null);
     try {
@@ -455,14 +455,6 @@ export default function AaronTracker() {
         const lJson = await lRes.json();
         setLeaderboard(lJson);
       } catch {}
-      // Auto-push notification if position changed (rate-limited server-side)
-      if (autoPush && parsed.routeMile) {
-        fetch("/api/auto-push", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ routeMile: parsed.routeMile, movingAvgSpeed: parsed.movingAvgSpeed, currentSpeed: parsed.currentSpeed }),
-        }).catch(() => {});
-      }
     } catch (e) {
       setError(e.message || "Could not fetch live data.");
     }
