@@ -240,6 +240,35 @@ const statLabel = { fontSize: "10px", color: "#4a6a8a", letterSpacing: "2px", te
 const inputStyle = { background: "#111827", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#e8eaf6", padding: "10px 14px", fontSize: "16px", fontFamily: "inherit" };
 
 // ── Race progress helpers ────────────────────────────────────────────────────
+
+// Returns where an athlete is relative to checkpoints
+function getAthleteContext(routeMile) {
+  const m = parseFloat(routeMile);
+  if (isNaN(m)) return { atCamp: false, label: "off route", stage: 1 };
+  // Within 1.5 mi of a checkpoint = "at camp"
+  for (const cp of CHECKPOINTS) {
+    if (Math.abs(m - cp.mile) <= 1.5) {
+      const name = cp.name.replace("Start – ", "").split(" /")[0].split(" –")[0].trim();
+      return { atCamp: true, label: name, stage: CHECKPOINTS.indexOf(cp) };
+    }
+  }
+  // Find current stage
+  for (let i = 0; i < CHECKPOINTS.length - 1; i++) {
+    if (m >= CHECKPOINTS[i].mile && m < CHECKPOINTS[i + 1].mile) {
+      return { atCamp: false, label: `Stage ${i + 1}`, stage: i + 1 };
+    }
+  }
+  return { atCamp: false, label: "Stage 5", stage: 5 };
+}
+
+// Night-aware weather icon
+function getWeatherIcon(weatherIcon, isNight) {
+  if (!isNight) return weatherIcon;
+  if (weatherIcon === "☀️") return "🌙";
+  if (weatherIcon === "⛅") return "🌑";
+  return weatherIcon; // fog, snow, rain, storm look the same at night
+}
+
 function parseSpeedMph(speedStr) {
   if (!speedStr) return null;
   const m = parseFloat(speedStr);
@@ -402,19 +431,23 @@ export default function AaronTracker() {
         const c = wJson.current;
         const { icon, desc } = describeWeather(c.weather_code);
         const sunsetStr = wJson.daily?.sunset?.[0] ?? null;
+        const sunriseStr = wJson.daily?.sunrise?.[0] ?? null;
         // Open-Meteo returns local-time strings (no TZ offset). Attach the UTC offset
         // from the response so Date parses it as the correct UTC moment, not browser local.
         const utcOffsetSec = wJson.utc_offset_seconds ?? 0;
         const timezone = wJson.timezone ?? "America/Inuvik";
-        let sunsetAt = null;
-        if (sunsetStr) {
+        const toDate = (str) => {
+          if (!str) return null;
           const sign = utcOffsetSec >= 0 ? "+" : "-";
           const abs = Math.abs(utcOffsetSec);
           const oh = String(Math.floor(abs / 3600)).padStart(2, "0");
           const om = String(Math.floor((abs % 3600) / 60)).padStart(2, "0");
-          sunsetAt = new Date(`${sunsetStr}:00${sign}${oh}:${om}`);
-        }
-        setWeather({ tempF: Math.round(c.temperature_2m), tempC: Math.round((c.temperature_2m - 32) * 5 / 9), windMph: Math.round(c.wind_speed_10m), icon, desc, sunsetAt, timezone });
+          return new Date(`${str}:00${sign}${oh}:${om}`);
+        };
+        const sunsetAt = toDate(sunsetStr);
+        const sunriseAt = toDate(sunriseStr);
+        const weatherCode = c.weather_code;
+        setWeather({ tempF: Math.round(c.temperature_2m), tempC: Math.round((c.temperature_2m - 32) * 5 / 9), windMph: Math.round(c.wind_speed_10m), icon, desc, sunsetAt, sunriseAt, timezone, weatherCode });
       } catch {}
       // Fetch leaderboard
       try {
@@ -806,23 +839,38 @@ export default function AaronTracker() {
                 <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.currentSpeed || "—"}</div>
               </div>
               {/* 3. Conditions + Sunset */}
-              {weather && (
-                <div style={card}>
-                  <div style={statLabel}>Conditions at Location</div>
-                  <div style={{ fontSize: "20px", marginBottom: "2px" }}>{weather.icon}</div>
-                  <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{weather.tempF}°F / {weather.tempC}°C</div>
-                  <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "2px" }}>{weather.desc} · {weather.windMph} mph wind</div>
-                  {weather.sunsetAt && (() => {
-                    const sunsetTime = weather.sunsetAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: weather.timezone || "America/Inuvik" });
-                    const until = formatTimeUntil(weather.sunsetAt);
-                    return (
-                      <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "6px", borderTop: "1px solid #1e2a4e", paddingTop: "6px" }}>
-                        🌅 Sunset {sunsetTime}{until ? <span style={{ color: "#7a9cc8" }}> · in {until}</span> : null}
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
+              {weather && (() => {
+                const isNight = weather.sunsetAt && new Date() > weather.sunsetAt;
+                const isSnow = weather.weatherCode >= 71 && weather.weatherCode <= 77;
+                const isHighWind = weather.windMph >= 20;
+                const displayIcon = getWeatherIcon(weather.icon, isNight);
+                const tz = weather.timezone || "America/Inuvik";
+                const tileStyle = {
+                  ...card,
+                  ...(isNight ? { background: "#0a0e20", borderColor: "#1a2a5e" } : {}),
+                  ...(isSnow ? { borderColor: "#2a5a9e" } : {}),
+                };
+                return (
+                  <div style={tileStyle}>
+                    <div style={statLabel}>Conditions at Location</div>
+                    <div style={{ fontSize: "22px", marginBottom: "2px" }}>{displayIcon}</div>
+                    <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{weather.tempF}°F / {weather.tempC}°C</div>
+                    <div style={{ fontSize: "12px", color: isHighWind ? "#f0a040" : "#7a9cc8", marginTop: "2px" }}>
+                      {weather.desc}{isHighWind ? " 💨" : ""} · {weather.windMph} mph wind
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "6px", borderTop: "1px solid #1e2a4e", paddingTop: "6px" }}>
+                      {isNight ? (() => {
+                        const sunriseTime = weather.sunriseAt ? weather.sunriseAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: tz }) : null;
+                        return <span>🌙 Night{sunriseTime ? <span style={{ color: "#4a6a8a" }}> · sunrise {sunriseTime}</span> : null}</span>;
+                      })() : (() => {
+                        const sunsetTime = weather.sunsetAt ? weather.sunsetAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: tz }) : null;
+                        const until = formatTimeUntil(weather.sunsetAt);
+                        return sunsetTime ? <span>🌅 Sunset {sunsetTime}{until ? <span style={{ color: "#7a9cc8" }}> · in {until}</span> : null}</span> : null;
+                      })()}
+                    </div>
+                  </div>
+                );
+              })()}
               {/* 4-5. Next Camp + Est. Arrival */}
               {mile !== null && (() => {
                 const nc = getNextCampInfo(mile, liveData.movingAvgSpeed);
@@ -854,22 +902,49 @@ export default function AaronTracker() {
                 <div style={statLabel}>Elevation Gain</div>
                 <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.elevationGain || "—"}</div>
               </div>
-              {/* 6 & 7. Race Position + Gap to Leader */}
+              {/* 8+. Race Position + Leader + Field */}
               {leaderboard?.athletes?.length > 0 && leaderboard.aaronRank > 0 && (() => {
                 const aaron = leaderboard.athletes[leaderboard.aaronRank - 1];
                 const leader = leaderboard.athletes[0];
                 const ahead = leaderboard.aaronRank > 1 ? leaderboard.athletes[leaderboard.aaronRank - 2] : null;
+                const aheadCtx = ahead ? getAthleteContext(ahead.routeMile) : null;
+                const leaderCtx = getAthleteContext(leader.routeMile);
+                const gapToAhead = ahead ? (ahead.routeMile - aaron.routeMile).toFixed(1) : null;
+                const gapToLeader = (leader.routeMile - aaron.routeMile).toFixed(1);
                 return (<>
                   <div style={card}>
                     <div style={statLabel}>Race Position</div>
-                    <div style={{ fontSize: "22px", color: "#4a9eff", fontWeight: "bold" }}>#{leaderboard.aaronRank} <span style={{ fontSize: "12px", color: "#4a6a8a" }}>of {leaderboard.remaining}</span></div>
-                    {ahead && <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "4px" }}>{(ahead.routeMile - aaron.routeMile).toFixed(1)} mi behind {ahead.name.split(" ")[0]}</div>}
+                    <div style={{ fontSize: "22px", color: "#4a9eff", fontWeight: "bold" }}>
+                      #{leaderboard.aaronRank} <span style={{ fontSize: "12px", color: "#4a6a8a" }}>of {leaderboard.remaining}</span>
+                    </div>
+                    {leaderboard.aaronRank === 1 && (
+                      <div style={{ fontSize: "12px", color: "#00c896", marginTop: "6px" }}>Leading the field 🏆</div>
+                    )}
+                    {ahead && aheadCtx && (
+                      <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "6px", lineHeight: "1.5" }}>
+                        <span style={{ color: "#c8d4f0" }}>{ahead.name.split(" ")[0]}</span>
+                        {aheadCtx.atCamp
+                          ? <span style={{ color: "#4a9eff" }}> · at {aheadCtx.label}</span>
+                          : <span> · {gapToAhead} mi ahead</span>
+                        }
+                      </div>
+                    )}
                   </div>
-                  {leaderboard.aaronRank > 1 && <div style={card}>
-                    <div style={statLabel}>Gap to Leader</div>
-                    <div style={{ fontSize: "18px", color: "#e8eaf6", fontWeight: "500" }}>{(leader.routeMile - aaron.routeMile).toFixed(1)} mi</div>
-                    <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "4px" }}>behind {leader.name}</div>
-                  </div>}
+                  {leaderboard.aaronRank > 1 && (
+                    <div style={card}>
+                      <div style={statLabel}>Leader</div>
+                      <div style={{ fontSize: "14px", color: "#e8eaf6", fontWeight: "600", marginBottom: "4px" }}>
+                        {leader.name.split(" ")[0]} {leader.name.split(" ").slice(-1)[0]}
+                      </div>
+                      {leaderCtx.atCamp ? (<>
+                        <div style={{ fontSize: "13px", color: "#4a9eff" }}>at {leaderCtx.label}</div>
+                        <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "3px" }}>{gapToLeader} mi ahead</div>
+                      </>) : (<>
+                        <div style={{ fontSize: "13px", color: "#e8eaf6" }}>{gapToLeader} mi ahead</div>
+                        <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "3px" }}>{leaderCtx.label}</div>
+                      </>)}
+                    </div>
+                  )}
                   <div style={card}>
                     <div style={statLabel}>Field Remaining</div>
                     <div style={{ fontSize: "22px", color: "#e8eaf6", fontWeight: "500" }}>{leaderboard.remaining} <span style={{ fontSize: "12px", color: "#4a6a8a" }}>/ {leaderboard.total} started</span></div>
