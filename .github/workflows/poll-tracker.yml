@@ -1,0 +1,25 @@
+name: Poll Aaron's Tracker
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # every 10 minutes
+  workflow_dispatch:           # manual trigger for testing
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Poll Tracklead and push notification if Aaron moved
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            https://trackanaaron.vercel.app/api/server-poll \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+          echo "HTTP $HTTP_CODE: $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Poll failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
