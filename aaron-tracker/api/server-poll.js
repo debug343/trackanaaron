@@ -105,12 +105,24 @@ export default async function handler(req, res) {
     const lastMile     = state?.lastMile ?? null;          // movement gate (independent of push)
     const lastPushMile = state?.lastAutoPushMile ?? null;  // push delta gate
     const lastPushAt   = state?.lastAutoPushAt ? new Date(state.lastAutoPushAt) : null;
+    const inRestMode   = state?.restMode === true;
     const now = new Date();
 
     // 3. Movement check — uses lastMile, not lastAutoPushMile, so history records even when
     //    push is rate-limited
     if (lastMile !== null && Math.abs(routeMile - lastMile) < MIN_MILE_DELTA) {
       return res.status(200).json({ pushed: false, reason: "no_movement", currentMile: routeMile, lastMile });
+    }
+
+    // 3b. Rest mode — record position to history but suppress push notification
+    if (inRestMode) {
+      const points = histPoints || [];
+      points.push({ t: now.toISOString(), m: routeMile, sp: parsed.currentSpeed || null, avg: parsed.movingAvgSpeed || null, st: parsed.status || null });
+      await Promise.all([
+        writeFile("data/track-history.json", points, histSha),
+        writeFile("data/notify-state.json", { ...(state || {}), lastMile: routeMile, updatedAt: now.toISOString() }, stateSha),
+      ]);
+      return res.status(200).json({ pushed: false, reason: "rest_mode", historyRecorded: true, mile: routeMile });
     }
 
     // 4. Append data point to track history

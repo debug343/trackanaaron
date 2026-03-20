@@ -377,6 +377,12 @@ export default function AaronTracker() {
   const [commentStatus, setCommentStatus] = useState("");
   const [trackHistory, setTrackHistory] = useState([]);
   const [followerCount, setFollowerCount] = useState(null);
+  const [restMode, setRestMode] = useState(false);
+  const [restNote, setRestNote] = useState("");
+  const [restSince, setRestSince] = useState(null);
+  const [restModeLoading, setRestModeLoading] = useState(false);
+  const [restNoteInput, setRestNoteInput] = useState("");
+  const restModeRef = React.useRef(false);
 
   useEffect(() => {
     try {
@@ -387,7 +393,13 @@ export default function AaronTracker() {
     fetchLiveData();
     fetchComments();
     fetch("/api/track-history").then(r => r.json()).then(d => setTrackHistory(d.points || [])).catch(() => {});
-    fetch("/api/stats").then(r => r.json()).then(d => setFollowerCount(d.total || 0)).catch(() => {});
+    fetch("/api/stats").then(r => r.json()).then(d => {
+      setFollowerCount(d.total || 0);
+      setRestMode(d.restMode || false);
+      restModeRef.current = d.restMode || false;
+      setRestNote(d.restNote || "");
+      setRestSince(d.restSince || null);
+    }).catch(() => {});
 
     // Web Push init
     (async () => {
@@ -419,12 +431,14 @@ export default function AaronTracker() {
       }
     })();
 
-    // Auto-refresh live data every 11 minutes
+    // Auto-refresh live data every 11 minutes (skipped when rest mode is active)
     const REFRESH_MS = 11 * 60 * 1000;
     setNextRefreshIn(REFRESH_MS / 1000);
     const refreshInterval = setInterval(() => {
-      fetchLiveData();
-      setNextRefreshIn(REFRESH_MS / 1000);
+      if (!restModeRef.current) {
+        fetchLiveData();
+        setNextRefreshIn(REFRESH_MS / 1000);
+      }
     }, REFRESH_MS);
     const countdownInterval = setInterval(() => {
       setNextRefreshIn((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
@@ -484,6 +498,26 @@ export default function AaronTracker() {
       setError(e.message || "Could not fetch live data.");
     }
     setLoading(false);
+  }
+
+  async function toggleRestMode(enable) {
+    setRestModeLoading(true);
+    try {
+      const res = await fetch("/api/stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminPwd, restMode: enable, restNote: restNoteInput }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed");
+      setRestMode(enable);
+      restModeRef.current = enable;
+      setRestNote(restNoteInput);
+      setRestSince(enable ? new Date().toISOString() : null);
+    } catch (e) {
+      alert("Rest mode error: " + e.message);
+    }
+    setRestModeLoading(false);
   }
 
   async function generateNarrative() {
@@ -853,9 +887,21 @@ export default function AaronTracker() {
               {loading ? "⟳ Refreshing..." : "↻ Refresh"}
             </button>
           </div>
+          {restMode && (
+            <div style={{ background: "linear-gradient(135deg, #1a1200, #2a1e00)", border: "1px solid #5a3a00", borderRadius: "10px", padding: "14px 18px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "24px" }}>🏕️</span>
+              <div>
+                <div style={{ color: "#f0c060", fontWeight: "600", fontSize: "14px" }}>Aaron is at camp — resting</div>
+                {restNote && <div style={{ color: "#a08040", fontSize: "12px", marginTop: "2px" }}>{restNote}</div>}
+                {restSince && <div style={{ color: "#6a5020", fontSize: "11px", marginTop: "2px" }}>Since {new Date(restSince).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/Inuvik" })} Inuvik time</div>}
+              </div>
+              <div style={{ marginLeft: "auto", color: "#6a5020", fontSize: "11px", textAlign: "right" }}>Stats show last recorded position<br/>Auto-refresh paused</div>
+            </div>
+          )}
           <div style={{ color: "#4a7aaa", fontSize: "11px", marginBottom: "16px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
             {lastFetched && <span>Last fetched: {lastFetched}</span>}
-            {nextRefreshIn !== null && <span style={{ color: "#2a4a5a" }}>Auto-refresh in {formatCountdown(nextRefreshIn)}</span>}
+            {!restMode && nextRefreshIn !== null && <span style={{ color: "#2a4a5a" }}>Auto-refresh in {formatCountdown(nextRefreshIn)}</span>}
+            {restMode && <span style={{ color: "#5a4020" }}>⏸ Auto-refresh paused (rest mode)</span>}
           </div>
           {error && <div style={{ background: "#1a0a0a", border: "1px solid #5a1a1a", borderRadius: "8px", padding: "16px", marginBottom: "16px", color: "#ff8080", fontSize: "14px" }}>⚠ {error}</div>}
 
@@ -882,9 +928,13 @@ export default function AaronTracker() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "12px", marginBottom: "16px" }}>
               {/* 1. Race Status */}
-              <div style={card}>
+              <div style={{ ...card, ...(restMode ? { background: "#1a1200", borderColor: "#5a3a00" } : {}) }}>
                 <div style={statLabel}>Race Status</div>
-                <div style={{ fontSize: "15px", color: liveData.status === "Active" ? "#00c896" : "#4a9eff", fontWeight: "500" }}>{liveData.status || "—"}</div>
+                {restMode
+                  ? <div style={{ fontSize: "15px", color: "#f0c060", fontWeight: "500" }}>🏕️ At Camp</div>
+                  : <div style={{ fontSize: "15px", color: liveData.status === "Active" ? "#00c896" : "#4a9eff", fontWeight: "500" }}>{liveData.status || "—"}</div>
+                }
+                {restMode && restNote && <div style={{ fontSize: "11px", color: "#a08040", marginTop: "2px" }}>{restNote}</div>}
               </div>
               {/* 2. Current Speed */}
               <div style={card}>
@@ -1087,6 +1137,21 @@ export default function AaronTracker() {
           <p style={{ color: "#4a7aaa", fontSize: "14px", margin: "0 0 20px", lineHeight: "1.6" }}>Daily notes and updates from Aaron's team throughout the race.</p>
 
           {/* Admin write panel */}
+          {isAdmin && <div style={{ ...card, marginBottom: "16px", background: restMode ? "#1a1200" : "#0d1520", borderColor: restMode ? "#5a3a00" : "#1e3a6e" }}>
+            <div style={{ fontSize: "11px", letterSpacing: "3px", color: restMode ? "#f0c060" : "#7a9cc8", textTransform: "uppercase", marginBottom: "12px" }}>🏕️ Rest Mode</div>
+            <div style={{ fontSize: "13px", color: "#8a9cc8", marginBottom: "10px" }}>
+              {restMode
+                ? "Aaron is shown as resting. Auto-refresh and push notifications are paused."
+                : "Enable when Aaron is at camp so viewers see a resting state instead of stale active data."}
+            </div>
+            {!restMode && (
+              <input value={restNoteInput} onChange={e => setRestNoteInput(e.target.value)} placeholder="Note (optional) e.g. Sleeping at Fort McPherson" style={{ ...inputStyle, marginBottom: "10px" }} />
+            )}
+            <button onClick={() => toggleRestMode(!restMode)} disabled={restModeLoading} style={{ background: restMode ? "linear-gradient(135deg, #1a5fc8, #0d3a8e)" : "linear-gradient(135deg, #5a3a00, #3a2000)", color: restMode ? "#fff" : "#f0c060", border: "none", borderRadius: "6px", padding: "10px 20px", fontSize: "14px", cursor: restModeLoading ? "not-allowed" : "pointer", minHeight: "44px" }}>
+              {restModeLoading ? "Saving..." : restMode ? "▶ Resume Active Mode" : "🏕️ Enable Rest Mode"}
+            </button>
+          </div>}
+
           {isAdmin && <div style={{ ...card, marginBottom: "24px" }}>
             <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#00c896", textTransform: "uppercase", marginBottom: "16px" }}>✓ New Entry</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
