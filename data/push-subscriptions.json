@@ -7,13 +7,6 @@
     }
   },
   {
-    "endpoint": "https://web.push.apple.com/QLUL8f0ZmXfBp5vtcQsxZIICxCg9PXiX8FSSPkDVKoMOd2Wa6EH1Nr07wkkc58-mRHkuOhM8BZMO8mLwUUUN3xdXqFgeQkxHZ4ETjDaPQBZULvo6RAwny6jX0iNpYdAEPdw_fsw38nRr3qPy56FNWp20Hd_UmRNiyDx3ssYCyHw",
-    "keys": {
-      "p256dh": "BI2Y2YIr_TlKDz7FDLICF-eeL7tr7B2weDydZr2pHb3VHP4nPXMPW9ixp3DN2OjyPyfQ0QCEZB6i2SEFfgz_cys",
-      "auth": "kZxevWyQT5Rl1W2XALQZEg"
-    }
-  },
-  {
     "endpoint": "https://web.push.apple.com/QPIgfdCso8_TgTOBLs7jp66HxJHkHzQ_LkG1TzFCS94pVLRI24FFVMSh3shsNM_eLMBCczKLtBcl_kJ6Y8fbKBRq_loj8KEHsf5GMrLxB-k_UkFLpP_hZXhNv_cnNlv15tJWEgxlB2jKvsleBC39H_-f-_rnYGIG2dRLdicju48",
     "keys": {
       "p256dh": "BEreJkoI6zLh4Dnb0dIBaTAgH71lSv45rXdNjUSIsBf0z-N6V8F_QEINTDsatnPDCSMHOXuhuL0dZ__kk2hgULU",
