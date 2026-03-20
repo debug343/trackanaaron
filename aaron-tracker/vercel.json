@@ -1,4 +1,9 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "crons": [
     { "path": "/api/notify?type=morning", "schedule": "30 14 * * *" },
     { "path": "/api/notify?type=evening", "schedule": "0 5 * * *" }
