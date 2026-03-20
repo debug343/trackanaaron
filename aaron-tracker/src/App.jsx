@@ -161,7 +161,7 @@ function interpolateElev(mile) {
   return null;
 }
 
-function ElevationProfile({ currentMile, dailyStats = [] }) {
+function ElevationProfile({ currentMile, dailyStats = [], otherAthletes = [] }) {
   const W = 860, H = 210, padL = 34, padR = 10, padT = 46, padB = 48;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const maxElev = 85;
@@ -241,6 +241,40 @@ function ElevationProfile({ currentMile, dailyStats = [] }) {
           </g>
         );
       })}
+
+      {/* Other athletes */}
+      {(() => {
+        const COLORS = ["#ff7060", "#f0c040", "#c070f0", "#60d0f0", "#f070c0", "#80d080"];
+        // Sort by mile so stagger is spatially consistent
+        const valid = otherAthletes
+          .map(a => ({ ...a, m: parseFloat(a.routeMile) }))
+          .filter(a => !isNaN(a.m) && a.m >= 0 && a.m <= 170.8)
+          .sort((a, b) => a.m - b.m);
+        // Assign stagger tier: athletes within 8 miles of a previous one get bumped up
+        const tiers = [];
+        valid.forEach((a, i) => {
+          const prev = valid.slice(0, i);
+          const nearby = prev.filter(p => Math.abs(p.m - a.m) < 8);
+          tiers.push(nearby.length % 3);
+        });
+        const TIER_Y = [-14, -24, -34]; // label offset from marker
+        return valid.map((a, i) => {
+          const x = toX(a.m);
+          const elev = interpolateElev(a.m) ?? 0;
+          const y = toY(elev);
+          const color = COLORS[i % COLORS.length];
+          const firstName = a.name.split(" ")[0];
+          const labelY = y + TIER_Y[tiers[i]];
+          return (
+            <g key={a.name}>
+              <line x1={x} y1={labelY + 10} x2={x} y2={y - 4} stroke={color} strokeWidth="0.7" strokeOpacity="0.35" strokeDasharray="2 2" />
+              <polygon points={`${x},${y} ${x - 4},${y - 7} ${x + 4},${y - 7}`} fill={color} stroke="#0a0e1a" strokeWidth="1" opacity="0.85" />
+              <text x={x} y={labelY} textAnchor="middle" fill={color} fontSize="8.5" fontFamily="Georgia,serif" fontWeight="bold">{firstName}</text>
+              <text x={x} y={labelY + 9} textAnchor="middle" fill={color} fontSize="7.5" fontFamily="Georgia,serif" opacity="0.75">{a.m.toFixed(1)}mi</text>
+            </g>
+          );
+        });
+      })()}
 
       {/* Aaron's position */}
       {curElev !== null && (
@@ -891,7 +925,13 @@ export default function AaronTracker() {
         <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>Course Elevation Profile</div>
           <div style={{ ...card, padding: "16px 12px 8px" }}>
-            <ElevationProfile currentMile={mile} dailyStats={dailyStatsList} />
+            <ElevationProfile
+              currentMile={mile}
+              dailyStats={dailyStatsList}
+              otherAthletes={leaderboard?.athletes
+                ? leaderboard.athletes.filter((_, i) => i !== (leaderboard.aaronRank - 1))
+                : []}
+            />
           </div>
         </div>
 
