@@ -383,6 +383,10 @@ export default function AaronTracker() {
   const [restModeLoading, setRestModeLoading] = useState(false);
   const [restNoteInput, setRestNoteInput] = useState("");
   const restModeRef = React.useRef(false);
+  const [raceUpdate, setRaceUpdate] = useState("");
+  const [raceUpdateAt, setRaceUpdateAt] = useState(null);
+  const [raceUpdateInput, setRaceUpdateInput] = useState("");
+  const [raceUpdateLoading, setRaceUpdateLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -399,6 +403,8 @@ export default function AaronTracker() {
       restModeRef.current = d.restMode || false;
       setRestNote(d.restNote || "");
       setRestSince(d.restSince || null);
+      setRaceUpdate(d.raceUpdate || "");
+      setRaceUpdateAt(d.raceUpdateAt || null);
     }).catch(() => {});
 
     // Web Push init
@@ -518,6 +524,24 @@ export default function AaronTracker() {
       alert("Rest mode error: " + e.message);
     }
     setRestModeLoading(false);
+  }
+
+  async function saveRaceUpdate() {
+    setRaceUpdateLoading(true);
+    try {
+      const res = await fetch("/api/stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminPwd, raceUpdate: raceUpdateInput.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed");
+      setRaceUpdate(raceUpdateInput.trim());
+      setRaceUpdateAt(raceUpdateInput.trim() ? new Date().toISOString() : null);
+    } catch (e) {
+      alert("Error saving update: " + e.message);
+    }
+    setRaceUpdateLoading(false);
   }
 
   async function generateNarrative() {
@@ -827,6 +851,18 @@ export default function AaronTracker() {
 
       <div style={{ maxWidth: "860px", margin: "0 auto", padding: "36px 20px" }}>
 
+        {/* ── RACE UPDATE BANNER ── */}
+        {raceUpdate && (
+          <div style={{ marginBottom: "24px", background: "linear-gradient(135deg, #1a0e00, #2a1800)", border: "1px solid #c8780040", borderRadius: "10px", padding: "14px 18px", display: "flex", gap: "12px", alignItems: "flex-start" }}>
+            <span style={{ fontSize: "20px", flexShrink: 0, marginTop: "1px" }}>📢</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c87800", textTransform: "uppercase", marginBottom: "4px" }}>Race Update</div>
+              <div style={{ color: "#f0d090", fontSize: "14px", lineHeight: "1.6" }}>{raceUpdate}</div>
+              {raceUpdateAt && <div style={{ fontSize: "11px", color: "#6a4a20", marginTop: "4px" }}>{new Date(raceUpdateAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Inuvik" })} Inuvik time</div>}
+            </div>
+          </div>
+        )}
+
         {/* ── ABOUT ── */}
         <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>What is he up to now?!</div>
@@ -1135,6 +1171,37 @@ export default function AaronTracker() {
         <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>Race Journal</div>
           <p style={{ color: "#4a7aaa", fontSize: "14px", margin: "0 0 20px", lineHeight: "1.6" }}>Daily notes and updates from Aaron's team throughout the race.</p>
+
+          {/* Race Update admin card */}
+          {isAdmin && <div style={{ ...card, marginBottom: "16px" }}>
+            <div style={{ fontSize: "11px", letterSpacing: "3px", color: raceUpdate ? "#c87800" : "#7a9cc8", textTransform: "uppercase", marginBottom: "12px" }}>📢 Race Update</div>
+            <div style={{ fontSize: "13px", color: "#8a9cc8", marginBottom: "10px" }}>
+              Shown as a banner above the About section for all visitors. Clear to remove.
+            </div>
+            <textarea
+              value={raceUpdateInput}
+              onChange={e => setRaceUpdateInput(e.target.value)}
+              placeholder={raceUpdate || "e.g. Delayed start today due to extreme windchill — expected to resume at 2 PM MDT"}
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical", lineHeight: "1.6", width: "100%", boxSizing: "border-box", marginBottom: "10px" }}
+            />
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={saveRaceUpdate} disabled={raceUpdateLoading} style={{ background: "linear-gradient(135deg, #7a4a00, #4a2a00)", color: "#f0d090", border: "none", borderRadius: "6px", padding: "10px 18px", fontSize: "14px", cursor: raceUpdateLoading ? "not-allowed" : "pointer", minHeight: "44px", flex: 1 }}>
+                {raceUpdateLoading ? "Saving..." : "Post Update"}
+              </button>
+              {raceUpdate && <button onClick={async () => {
+                setRaceUpdateLoading(true);
+                try {
+                  const res = await fetch("/api/stats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: adminPwd, raceUpdate: "" }) });
+                  if (res.ok) { setRaceUpdate(""); setRaceUpdateAt(null); setRaceUpdateInput(""); }
+                } catch {}
+                setRaceUpdateLoading(false);
+              }} disabled={raceUpdateLoading} style={{ background: "none", border: "1px solid #3a2a1a", borderRadius: "6px", color: "#6a4a20", padding: "10px 14px", fontSize: "13px", cursor: "pointer", minHeight: "44px" }}>
+                Clear
+              </button>}
+            </div>
+            {raceUpdate && <div style={{ fontSize: "11px", color: "#6a4a20", marginTop: "8px" }}>Current: "{raceUpdate}"</div>}
+          </div>}
 
           {/* Admin write panel */}
           {isAdmin && <div style={{ ...card, marginBottom: "16px", background: restMode ? "#1a1200" : "#0d1520", borderColor: restMode ? "#5a3a00" : "#1e3a6e" }}>
