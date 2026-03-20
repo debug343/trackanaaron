@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ── Web Push helpers ──────────────────────────────────────────────────────────
 function isIOS() {
@@ -382,7 +382,7 @@ export default function AaronTracker() {
   const [restSince, setRestSince] = useState(null);
   const [restModeLoading, setRestModeLoading] = useState(false);
   const [restNoteInput, setRestNoteInput] = useState("");
-  const restModeRef = React.useRef(false);
+  const restModeRef = useRef(false);
   const [raceUpdate, setRaceUpdate] = useState("");
   const [raceUpdateAt, setRaceUpdateAt] = useState(null);
   const [raceUpdateInput, setRaceUpdateInput] = useState("");
