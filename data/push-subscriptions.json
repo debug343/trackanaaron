@@ -5,12 +5,5 @@
       "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtZ5MuYkggJ-CPcGUWtFdMKDhh-X2Dz_iHUCkWKCbntaO0pSPiI-u8R3tKhh1A",
       "auth": "xdAj4OE5bPVZ1pM-xWKuCg"
     }
-  },
-  {
-    "endpoint": "https://fcm.googleapis.com/fcm/send/EXPIRED_ENDPOINT",
-    "keys": {
-      "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtZ5MuYkggJ-CPcGUWtFdMKDhh-X2Dz_iHUCkWKCbntaO0pSPiI-u8R3tKhh1A",
-      "auth": "xdAj4OE5bPVZ1pM-xWKuCg"
-    }
   }
 ]
