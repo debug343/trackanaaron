@@ -376,6 +376,7 @@ export default function AaronTracker() {
   const [commentWebsite, setCommentWebsite] = useState("");
   const [commentStatus, setCommentStatus] = useState("");
   const [trackHistory, setTrackHistory] = useState([]);
+  const [followerCount, setFollowerCount] = useState(null);
 
   useEffect(() => {
     try {
@@ -386,6 +387,7 @@ export default function AaronTracker() {
     fetchLiveData();
     fetchComments();
     fetch("/api/track-history").then(r => r.json()).then(d => setTrackHistory(d.points || [])).catch(() => {});
+    fetch("/api/stats").then(r => r.json()).then(d => setFollowerCount(d.total || 0)).catch(() => {});
 
     // Web Push init
     (async () => {
@@ -775,9 +777,16 @@ export default function AaronTracker() {
             <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "8px" }}>Live Race Tracker</div>
             <h1 style={{ margin: "0 0 6px", fontSize: "clamp(26px, 5vw, 42px)", fontWeight: "normal", color: "#fff" }}>{ATHLETE_NAME}</h1>
             <div style={{ color: "#7a9cc8", fontSize: "14px", marginBottom: "20px" }}>{RACE_NAME} · 170.8 mi · Arctic Canada · March 18–22, 2026</div>
-            <button onClick={handleShare} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #1e3a6e", borderRadius: "20px", color: shareCopied ? "#00c896" : "#7a9cc8", padding: "9px 20px", fontSize: "13px", cursor: "pointer", letterSpacing: "1px", fontFamily: "inherit" }}>
-              {shareCopied ? "✓ Link Copied!" : "⎘ Share Aaron's Race"}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "14px", flexWrap: "wrap" }}>
+              <button onClick={handleShare} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #1e3a6e", borderRadius: "20px", color: shareCopied ? "#00c896" : "#7a9cc8", padding: "9px 20px", fontSize: "13px", cursor: "pointer", letterSpacing: "1px", fontFamily: "inherit" }}>
+                {shareCopied ? "✓ Link Copied!" : "⎘ Share Aaron's Race"}
+              </button>
+              {followerCount !== null && followerCount > 0 && (
+                <div style={{ fontSize: "12px", color: "#4a6a8a", letterSpacing: "1px" }}>
+                  👥 {followerCount} following
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
