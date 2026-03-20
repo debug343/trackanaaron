@@ -242,69 +242,74 @@ function ElevationProfile({ currentMile, dailyStats = [], otherAthletes = [], sc
         );
       })}
 
-      {/* Other athletes */}
+      {/* Other athletes — labels pinned to top, dotted connector to marker */}
       {(() => {
         const COLORS = ["#ff7060", "#f0c040", "#c070f0", "#60d0f0", "#f070c0", "#80d080"];
-        // Sort by mile so stagger is spatially consistent
         const valid = otherAthletes
           .map(a => ({ ...a, m: parseFloat(a.routeMile) }))
           .filter(a => !isNaN(a.m) && a.m >= 0 && a.m <= 170.8)
           .sort((a, b) => a.m - b.m);
-        // Assign stagger tier: athletes within 8 miles of a previous one get bumped up
         const tiers = [];
         valid.forEach((a, i) => {
-          const prev = valid.slice(0, i);
-          const nearby = prev.filter(p => Math.abs(p.m - a.m) < 8);
+          const nearby = valid.slice(0, i).filter(p => Math.abs(p.m - a.m) < 8);
           tiers.push(nearby.length % 3);
         });
-        const TIER_Y = [-14, -24, -34]; // label offset from marker
+        // Labels pinned to top of plot area across 3 rows
+        const LABEL_Y = [padT + 6, padT + 18, padT + 30];
         return valid.map((a, i) => {
           const x = toX(a.m);
           const elev = interpolateElev(a.m) ?? 0;
           const y = toY(elev);
           const color = COLORS[i % COLORS.length];
           const firstName = a.name.split(" ")[0];
-          const labelY = y + TIER_Y[tiers[i]];
+          const labelY = LABEL_Y[tiers[i]];
           return (
             <g key={a.name}>
-              <line x1={x} y1={labelY + 10} x2={x} y2={y - 4} stroke={color} strokeWidth="0.7" strokeOpacity="0.35" strokeDasharray="2 2" />
+              <line x1={x} y1={labelY + 12} x2={x} y2={y - 6} stroke={color} strokeWidth="0.8" strokeOpacity="0.45" strokeDasharray="2 3" />
               <polygon points={`${x},${y} ${x - 4},${y - 7} ${x + 4},${y - 7}`} fill={color} stroke="#0a0e1a" strokeWidth="1" opacity="0.85" />
               <text x={x} y={labelY} textAnchor="middle" fill={color} fontSize="8.5" fontFamily="Georgia,serif" fontWeight="bold">{firstName}</text>
-              <text x={x} y={labelY + 9} textAnchor="middle" fill={color} fontSize="7.5" fontFamily="Georgia,serif" opacity="0.75">{a.m.toFixed(1)}mi</text>
+              <text x={x} y={labelY + 10} textAnchor="middle" fill={color} fontSize="7.5" fontFamily="Georgia,serif" opacity="0.75">{a.m.toFixed(1)}mi</text>
             </g>
           );
         });
       })()}
 
-      {/* Scratched athletes — ✕ at their last known position */}
-      {scratchedAthletes
-        .map(a => ({ ...a, m: parseFloat(a.routeMile) }))
-        .filter(a => !isNaN(a.m) && a.m >= 0 && a.m <= 170.8)
-        .map((a, i) => {
+      {/* Scratched athletes — ✕ at position, labels fanned out above with dotted connectors */}
+      {(() => {
+        const valid = scratchedAthletes
+          .map(a => ({ ...a, m: parseFloat(a.routeMile) }))
+          .filter(a => !isNaN(a.m) && a.m >= 0 && a.m <= 170.8);
+        return valid.map((a, i, arr) => {
           const x = toX(a.m);
           const elev = interpolateElev(a.m) ?? 0;
           const y = toY(elev);
           const firstName = a.name.split(" ")[0];
-          const labelY = y - 14 - (i % 2) * 10;
+          // Spread clustered labels horizontally around their shared x
+          const groupIdx = arr.slice(0, i).filter(b => Math.abs(b.m - a.m) < 2).length;
+          const sign = groupIdx % 2 === 0 ? 1 : -1;
+          const spread = Math.ceil((groupIdx + 1) / 2) * 20;
+          const labelX = x + sign * spread;
+          const labelY = padT + 6 + Math.floor(groupIdx / 2) * 20;
           return (
-            <g key={a.name} opacity="0.55">
+            <g key={a.name} opacity="0.6">
               <line x1={x - 5} y1={y - 5} x2={x + 5} y2={y + 5} stroke="#ff4444" strokeWidth="2" strokeLinecap="round" />
               <line x1={x + 5} y1={y - 5} x2={x - 5} y2={y + 5} stroke="#ff4444" strokeWidth="2" strokeLinecap="round" />
-              <text x={x} y={labelY} textAnchor="middle" fill="#ff6666" fontSize="8" fontFamily="Georgia,serif">{firstName}</text>
-              <text x={x} y={labelY + 9} textAnchor="middle" fill="#ff6666" fontSize="7.5" fontFamily="Georgia,serif">{a.m.toFixed(1)}mi</text>
+              <line x1={labelX} y1={labelY + 12} x2={x} y2={y - 6} stroke="#ff4444" strokeWidth="0.8" strokeOpacity="0.4" strokeDasharray="2 3" />
+              <text x={labelX} y={labelY} textAnchor="middle" fill="#ff6666" fontSize="8" fontFamily="Georgia,serif">{firstName}</text>
+              <text x={labelX} y={labelY + 10} textAnchor="middle" fill="#ff6666" fontSize="7.5" fontFamily="Georgia,serif">{a.m.toFixed(1)}mi</text>
             </g>
           );
-        })
-      }
+        });
+      })()}
 
-      {/* Aaron's position */}
+      {/* Aaron's position — label pinned above plot, dotted connector to marker */}
       {curElev !== null && (
         <g>
-          <line x1={toX(currentMile)} y1={padT} x2={toX(currentMile)} y2={base} stroke="#00c896" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.7" />
+          <line x1={toX(currentMile)} y1={padT - 10} x2={toX(currentMile)} y2={base} stroke="#00c896" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.6" />
           <circle cx={toX(currentMile)} cy={toY(curElev)} r="7" fill="#00c896" fillOpacity="0.18" stroke="#00c896" strokeWidth="1.5" />
           <text x={toX(currentMile)} y={toY(curElev) + 6} textAnchor="middle" fill="#00c896" fontSize="18" fontFamily="sans-serif">▲</text>
-          <text x={toX(currentMile)} y={toY(curElev) - 14} textAnchor="middle" fill="#00c896" fontSize="11" fontFamily="Georgia,serif" fontWeight="bold">Aaron</text>
-          <text x={toX(currentMile)} y={toY(curElev) - 3} textAnchor="middle" fill="#00c896" fontSize="9" fontFamily="Georgia,serif" opacity="0.85">{parseFloat(currentMile).toFixed(1)}mi</text>
+          <text x={toX(currentMile)} y={padT - 12} textAnchor="middle" fill="#00c896" fontSize="11" fontFamily="Georgia,serif" fontWeight="bold">Aaron</text>
+          <text x={toX(currentMile)} y={padT - 1} textAnchor="middle" fill="#00c896" fontSize="9" fontFamily="Georgia,serif" opacity="0.85">{parseFloat(currentMile).toFixed(1)}mi</text>
         </g>
       )}
     </svg>
