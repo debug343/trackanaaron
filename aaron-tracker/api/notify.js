@@ -255,11 +255,17 @@ export default async function handler(req, res) {
         readFile("data/journal.json"),
         readFile("data/track-history.json"),
       ]);
-      journalEntries = todaysJournalEntries(journal);
+      // Use dayStartDate from state (the morning's Inuvik date) rather than
+      // current clock — evening emails sent after midnight Inuvik would otherwise
+      // match the wrong day.
+      const reportDate = state?.dayStartDate || inuvikToday;
+      journalEntries = (journal || []).filter(
+        (e) => e.createdAt && inuvikDateStr(e.createdAt) === reportDate
+      );
 
-      // Compute day avg speed from track history (Inuvik date match)
+      // Compute day avg speed from track history using the same report date
       const todayPoints = (histPoints || []).filter(
-        (pt) => pt.avg && inuvikDateStr(pt.t) === inuvikToday
+        (pt) => pt.avg && inuvikDateStr(pt.t) === reportDate
       );
       if (todayPoints.length > 0) {
         const speeds = todayPoints.map((pt) => parseFloat(pt.avg)).filter((s) => !isNaN(s) && s > 0);
