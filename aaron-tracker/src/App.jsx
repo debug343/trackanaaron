@@ -79,6 +79,12 @@ function parseMile(routeMile) {
   return isNaN(m) ? null : m;
 }
 
+// Returns "YYYY-MM-DD" in Inuvik local time (MDT = UTC-6)
+function getInuvikDateStr(isoStr) {
+  const d = new Date(new Date(isoStr).getTime() - 6 * 60 * 60 * 1000);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 function progressPct(mile) {
   if (mile === null) return 0;
   return Math.min(100, (mile / TOTAL_MILES) * 100).toFixed(1);
@@ -155,7 +161,7 @@ function interpolateElev(mile) {
   return null;
 }
 
-function ElevationProfile({ currentMile }) {
+function ElevationProfile({ currentMile, dailyStats = [] }) {
   const W = 860, H = 210, padL = 34, padR = 10, padT = 46, padB = 48;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const maxElev = 85;
@@ -170,6 +176,7 @@ function ElevationProfile({ currentMile }) {
 
   const curElev = currentMile !== null ? interpolateElev(currentMile) : null;
   const stageBg = ["rgba(26,95,200,0.07)", "rgba(0,200,150,0.06)", "rgba(100,50,200,0.06)", "rgba(26,95,200,0.07)", "rgba(0,200,150,0.06)"];
+  const DAY_COLORS = ["#f0a040", "#c060f0", "#40d0a0", "#f06080", "#80d040", "#60b0f0"];
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
@@ -217,6 +224,20 @@ function ElevationProfile({ currentMile }) {
             <circle cx={x} cy={y} r="3.5" fill="#4a9eff" stroke="#0a0e1a" strokeWidth="1" />
             <text x={x} y={base + 14} textAnchor="middle" fill="#4a7aaa" fontSize="9" fontFamily="Georgia,serif">{name}</text>
             <text x={x} y={base + 24} textAnchor="middle" fill="#2a4a6a" fontSize="8" fontFamily="Georgia,serif">{mile === 170.8 ? "170.8" : mile} mi</text>
+          </g>
+        );
+      })}
+
+      {/* Day end markers */}
+      {dailyStats.map((ds, i) => {
+        const x = toX(ds.endMile);
+        const y = toY(interpolateElev(ds.endMile) ?? 0);
+        const r = 5;
+        const color = DAY_COLORS[i % DAY_COLORS.length];
+        return (
+          <g key={ds.dateStr}>
+            <polygon points={`${x},${y-r} ${x+r},${y} ${x},${y+r} ${x-r},${y}`} fill={color} stroke="#0a0e1a" strokeWidth="1" opacity="0.9" />
+            <text x={x} y={y-r-4} textAnchor="middle" fill={color} fontSize="8" fontFamily="Georgia,serif" fontWeight="bold">D{ds.dayNum}</text>
           </g>
         );
       })}
@@ -354,6 +375,7 @@ export default function AaronTracker() {
   const [commentFormLoadedAt] = useState(() => Date.now());
   const [commentWebsite, setCommentWebsite] = useState("");
   const [commentStatus, setCommentStatus] = useState("");
+  const [trackHistory, setTrackHistory] = useState([]);
 
   useEffect(() => {
     try {
@@ -363,6 +385,7 @@ export default function AaronTracker() {
     fetchJournal();
     fetchLiveData();
     fetchComments();
+    fetch("/api/track-history").then(r => r.json()).then(d => setTrackHistory(d.points || [])).catch(() => {});
 
     // Web Push init
     (async () => {
@@ -475,7 +498,7 @@ export default function AaronTracker() {
           system: `You are an enthusiastic ultra-endurance race commentator covering the 6633 Northern Lights Ultra — a brutal 170.8-mile self-supported foot race through Canada's Arctic, one of the world's toughest races. Write vivid, emotionally engaging updates. Be specific, concise (3-4 sentences), and inspirational. Reference the conditions (Arctic cold, remote terrain) when relevant.`,
           messages: [{
             role: "user",
-            content: `Write a progress narrative for Aaron Rabinowitz based on this data:\n- Race status: ${liveData.status}\n- Route mile: ${liveData.routeMile} of 170.8 (${progressPct(mile)}% complete)\n- Checkpoint: ${getCheckpoint(mile)}\n- Current speed: ${liveData.currentSpeed}\n- Moving time: ${liveData.movingTime}\n- Stopped time: ${liveData.stoppedTime}\n- Elevation gain: ${liveData.elevationGain}\n- Moving avg speed: ${liveData.movingAvgSpeed}`,
+            content: `Write a progress narrative for Aaron Rabinowitz based on this data:\n- Race status: ${liveData.status}\n- Route mile: ${liveData.routeMile} of 170.8 (${progressPct(mile)}% complete)\n- Checkpoint: ${getCheckpoint(mile)}\n- Current speed: ${liveData.currentSpeed}\n- Moving time: ${liveData.movingTime}\n- Stopped time: ${liveData.stoppedTime}\n- Elevation gain: ${liveData.elevationGain}\n- Moving avg speed: ${liveData.movingAvgSpeed}${(() => { const ds = dailyStats[getInuvikDateStr(new Date().toISOString())]; return ds ? `\n- Today so far: ${ds.milesCovered} miles (mi ${ds.startMile.toFixed(1)} → ${ds.endMile.toFixed(1)}), avg speed ${ds.avgSpeed || "unknown"} mph` : ""; })()}`,
           }],
         }),
       });
@@ -712,6 +735,35 @@ export default function AaronTracker() {
   const mile = liveData ? parseMile(liveData.routeMile) : null;
   const pct = progressPct(mile);
 
+  // Group track history into per-day stats (Inuvik local time = UTC-6)
+  const dailyStats = (() => {
+    if (!trackHistory.length) return {};
+    const byDay = {};
+    for (const pt of trackHistory) {
+      const day = getInuvikDateStr(pt.t);
+      if (!byDay[day]) byDay[day] = { miles: [], speeds: [] };
+      byDay[day].miles.push(pt.m);
+      const s = parseFloat(pt.avg);
+      if (!isNaN(s) && s > 0) byDay[day].speeds.push(s);
+    }
+    const RACE_START_MS = new Date("2026-03-17T12:00:00Z").getTime();
+    const result = {};
+    for (const [dateStr, d] of Object.entries(byDay)) {
+      const dayNum = Math.round((new Date(dateStr + "T12:00:00Z") - RACE_START_MS) / 86400000) + 1;
+      const avgSpd = d.speeds.length ? (d.speeds.reduce((a, b) => a + b, 0) / d.speeds.length).toFixed(1) : null;
+      result[dateStr] = {
+        dayNum, dateStr,
+        startMile: Math.min(...d.miles),
+        endMile:   Math.max(...d.miles),
+        milesCovered: parseFloat((Math.max(...d.miles) - Math.min(...d.miles)).toFixed(1)),
+        avgSpeed: avgSpd,
+        pointCount: d.miles.length,
+      };
+    }
+    return result;
+  })();
+  const dailyStatsList = Object.values(dailyStats).sort((a, b) => a.dayNum - b.dayNum);
+
   return (
     <div style={{ minHeight: "100vh", background: "#0a0e1a", color: "#e8eaf6", fontFamily: "'Georgia', 'Times New Roman', serif" }}>
 
@@ -760,7 +812,7 @@ export default function AaronTracker() {
         <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>Course Elevation Profile</div>
           <div style={{ ...card, padding: "16px 12px 8px" }}>
-            <ElevationProfile currentMile={mile} />
+            <ElevationProfile currentMile={mile} dailyStats={dailyStatsList} />
           </div>
         </div>
 
@@ -1104,6 +1156,27 @@ export default function AaronTracker() {
                         ))}
                       </div>
                     )}
+                    {(() => {
+                      const ds = dailyStats[getInuvikDateStr(entry.createdAt)];
+                      if (!ds) return null;
+                      return (
+                        <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "10px", marginTop: "10px" }}>
+                          <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>Day {ds.dayNum} Recap</div>
+                          <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
+                            {[
+                              ["Miles", `${ds.milesCovered} mi`],
+                              ["Route", `${ds.startMile.toFixed(1)} → ${ds.endMile.toFixed(1)}`],
+                              ds.avgSpeed ? ["Avg Speed", `${ds.avgSpeed} mph`] : null,
+                            ].filter(Boolean).map(([lbl, val]) => (
+                              <div key={lbl}>
+                                <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px" }}>{lbl}</div>
+                                <div style={{ fontSize: "13px", color: "#7a9cc8", marginTop: "2px" }}>{val}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>

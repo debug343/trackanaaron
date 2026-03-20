@@ -12,16 +12,16 @@ if (process.env.VAPID_PUBLIC_KEY) {
 const SITE_URL = "https://trackanaaron.vercel.app";
 const TRACKLEAD_URL = "https://trackleaders.com/6633ultra26i.php?name=Aaron_Rabinowitz";
 const TOTAL_MILES = 170.8;
-const MIN_MILE_DELTA = 0.5;       // must move at least this far to push
-const MIN_PUSH_INTERVAL_MS = 20 * 60 * 1000; // no more than once per 20 min
+const MIN_MILE_DELTA = 0.5;
+const MIN_PUSH_INTERVAL_MS = 20 * 60 * 1000;
 
 const CHECKPOINTS = [
-  { name: "Eagle Plains",  mile: 0 },
+  { name: "Eagle Plains",   mile: 0 },
   { name: "Fort McPherson", mile: 30 },
-  { name: "Peel River",    mile: 64 },
-  { name: "Aklavik",       mile: 92 },
-  { name: "Camp 4",        mile: 154 },
-  { name: "Inuvik",        mile: 170.8 },
+  { name: "Peel River",     mile: 64 },
+  { name: "Aklavik",        mile: 92 },
+  { name: "Camp 4",         mile: 154 },
+  { name: "Inuvik",         mile: 170.8 },
 ];
 
 function parseAthleteData(html) {
@@ -31,10 +31,10 @@ function parseAthleteData(html) {
   while ((match = rowRegex.exec(html)) !== null) {
     const key = match[1].replace(/<[^>]+>/g, "").trim();
     const val = match[2].replace(/<[^>]+>/g, "").trim();
-    if (key === "Route mile")          data.routeMile = val;
-    else if (key === "Current speed")  data.currentSpeed = val;
+    if (key === "Route mile")               data.routeMile = val;
+    else if (key === "Current speed")       data.currentSpeed = val;
     else if (key === "Moving Average Speed") data.movingAvgSpeed = val;
-    else if (key === "Race Status")    data.status = val;
+    else if (key === "Race Status")         data.status = val;
   }
   return data;
 }
@@ -73,7 +73,6 @@ async function sendWebPush(title, body) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  // Auth — Bearer token must match CRON_SECRET env var
   const secret = process.env.CRON_SECRET;
   const auth = req.headers["authorization"] || "";
   if (!secret || auth !== `Bearer ${secret}`) {
@@ -94,48 +93,78 @@ export default async function handler(req, res) {
       return res.status(200).json({ pushed: false, reason: "no_mile_data", raw: parsed.routeMile });
     }
 
-    // 2. Load stored state
-    const { data: state, sha } = await readFile("data/notify-state.json");
-    const lastPushMile = state?.lastAutoPushMile ?? null;
+    // 2. Parallel reads — notify-state (movement/push gate) + track-history (append target)
+    const [
+      { data: state, sha: stateSha },
+      { data: histPoints, sha: histSha },
+    ] = await Promise.all([
+      readFile("data/notify-state.json"),
+      readFile("data/track-history.json"),
+    ]);
+
+    const lastMile     = state?.lastMile ?? null;          // movement gate (independent of push)
+    const lastPushMile = state?.lastAutoPushMile ?? null;  // push delta gate
     const lastPushAt   = state?.lastAutoPushAt ? new Date(state.lastAutoPushAt) : null;
     const now = new Date();
 
-    // 3. Rate-limit checks
-    if (lastPushAt && (now - lastPushAt) < MIN_PUSH_INTERVAL_MS) {
-      return res.status(200).json({ pushed: false, reason: "rate_limited", nextPushIn: `${Math.round((MIN_PUSH_INTERVAL_MS - (now - lastPushAt)) / 60000)}m` });
-    }
-    if (lastPushMile !== null && Math.abs(routeMile - lastPushMile) < MIN_MILE_DELTA) {
-      return res.status(200).json({ pushed: false, reason: "no_movement", currentMile: routeMile, lastMile: lastPushMile });
+    // 3. Movement check — uses lastMile, not lastAutoPushMile, so history records even when
+    //    push is rate-limited
+    if (lastMile !== null && Math.abs(routeMile - lastMile) < MIN_MILE_DELTA) {
+      return res.status(200).json({ pushed: false, reason: "no_movement", currentMile: routeMile, lastMile });
     }
 
-    // 4. Build notification content
-    const pct = ((routeMile / TOTAL_MILES) * 100).toFixed(1);
-    const next = getNextCheckpoint(routeMile);
-    const locationStr = next
-      ? `${(next.mile - routeMile).toFixed(1)} mi to ${next.name}`
-      : "approaching finish 🏁";
-    const speedStr  = parsed.movingAvgSpeed ? ` · avg ${parsed.movingAvgSpeed}` : "";
-    const currentStr = parsed.currentSpeed  ? ` · now ${parsed.currentSpeed}`   : "";
-    const title = "🏃 Aaron Update";
-    const body  = `Mile ${routeMile.toFixed(1)} · ${pct}% · ${locationStr}${speedStr}${currentStr}`;
-
-    // 5. Send push
-    const pushResult = await sendWebPush(title, body);
-
-    // 6. Persist updated state
-    await writeFile("data/notify-state.json", {
-      ...(state || {}),
-      lastAutoPushMile: routeMile,
-      lastAutoPushAt:   now.toISOString(),
-    }, sha);
-
-    return res.status(200).json({
-      pushed: true,
-      sent:   pushResult.sent,
-      removed: pushResult.removed,
-      mile:   routeMile,
-      body,
+    // 4. Append data point to track history
+    const points = histPoints || [];
+    points.push({
+      t:   now.toISOString(),
+      m:   routeMile,
+      sp:  parsed.currentSpeed    || null,
+      avg: parsed.movingAvgSpeed  || null,
+      st:  parsed.status          || null,
     });
+    await writeFile("data/track-history.json", points, histSha);
+
+    // 5. Push rate-limit check
+    const rateLimited    = lastPushAt && (now - lastPushAt) < MIN_PUSH_INTERVAL_MS;
+    const belowPushDelta = lastPushMile !== null && Math.abs(routeMile - lastPushMile) < MIN_MILE_DELTA;
+
+    if (!rateLimited && !belowPushDelta) {
+      // 6. Build and send push notification
+      const pct = ((routeMile / TOTAL_MILES) * 100).toFixed(1);
+      const next = getNextCheckpoint(routeMile);
+      const locationStr = next
+        ? `${(next.mile - routeMile).toFixed(1)} mi to ${next.name}`
+        : "approaching finish 🏁";
+      const speedStr   = parsed.movingAvgSpeed ? ` · avg ${parsed.movingAvgSpeed}` : "";
+      const currentStr = parsed.currentSpeed   ? ` · now ${parsed.currentSpeed}`   : "";
+      const title = "🏃 Aaron Update";
+      const body  = `Mile ${routeMile.toFixed(1)} · ${pct}% · ${locationStr}${speedStr}${currentStr}`;
+      const pushResult = await sendWebPush(title, body);
+
+      await writeFile("data/notify-state.json", {
+        ...(state || {}),
+        lastMile:         routeMile,
+        updatedAt:        now.toISOString(),
+        lastAutoPushMile: routeMile,
+        lastAutoPushAt:   now.toISOString(),
+      }, stateSha);
+
+      return res.status(200).json({ pushed: true, sent: pushResult.sent, removed: pushResult.removed, mile: routeMile, body });
+    } else {
+      // Movement recorded to history, but push skipped
+      await writeFile("data/notify-state.json", {
+        ...(state || {}),
+        lastMile:  routeMile,
+        updatedAt: now.toISOString(),
+      }, stateSha);
+
+      return res.status(200).json({
+        pushed: false,
+        reason: rateLimited ? "rate_limited" : "push_delta",
+        historyRecorded: true,
+        mile: routeMile,
+      });
+    }
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
