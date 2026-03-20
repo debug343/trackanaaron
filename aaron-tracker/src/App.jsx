@@ -402,7 +402,19 @@ export default function AaronTracker() {
         const c = wJson.current;
         const { icon, desc } = describeWeather(c.weather_code);
         const sunsetStr = wJson.daily?.sunset?.[0] ?? null;
-        setWeather({ tempF: Math.round(c.temperature_2m), tempC: Math.round((c.temperature_2m - 32) * 5 / 9), windMph: Math.round(c.wind_speed_10m), icon, desc, sunsetAt: sunsetStr ? new Date(sunsetStr) : null });
+        // Open-Meteo returns local-time strings (no TZ offset). Attach the UTC offset
+        // from the response so Date parses it as the correct UTC moment, not browser local.
+        const utcOffsetSec = wJson.utc_offset_seconds ?? 0;
+        const timezone = wJson.timezone ?? "America/Inuvik";
+        let sunsetAt = null;
+        if (sunsetStr) {
+          const sign = utcOffsetSec >= 0 ? "+" : "-";
+          const abs = Math.abs(utcOffsetSec);
+          const oh = String(Math.floor(abs / 3600)).padStart(2, "0");
+          const om = String(Math.floor((abs % 3600) / 60)).padStart(2, "0");
+          sunsetAt = new Date(`${sunsetStr}:00${sign}${oh}:${om}`);
+        }
+        setWeather({ tempF: Math.round(c.temperature_2m), tempC: Math.round((c.temperature_2m - 32) * 5 / 9), windMph: Math.round(c.wind_speed_10m), icon, desc, sunsetAt, timezone });
       } catch {}
       // Fetch leaderboard
       try {
@@ -801,7 +813,7 @@ export default function AaronTracker() {
                   <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{weather.tempF}°F / {weather.tempC}°C</div>
                   <div style={{ fontSize: "12px", color: "#7a9cc8", marginTop: "2px" }}>{weather.desc} · {weather.windMph} mph wind</div>
                   {weather.sunsetAt && (() => {
-                    const sunsetTime = weather.sunsetAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+                    const sunsetTime = weather.sunsetAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: weather.timezone || "America/Inuvik" });
                     const until = formatTimeUntil(weather.sunsetAt);
                     return (
                       <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "6px", borderTop: "1px solid #1e2a4e", paddingTop: "6px" }}>
