@@ -893,7 +893,9 @@ export default function AaronTracker() {
               </div>
               {/* 3. Conditions + Sunset */}
               {weather && (() => {
-                const isNight = weather.sunsetAt && new Date() > weather.sunsetAt;
+                const now = new Date();
+                const isNight = (weather.sunsetAt && now > weather.sunsetAt) ||
+                                (weather.sunriseAt && now < weather.sunriseAt);
                 const isSnow = weather.weatherCode >= 71 && weather.weatherCode <= 77;
                 const isHighWind = weather.windMph >= 20;
                 const displayIcon = getWeatherIcon(weather.icon, isNight);
