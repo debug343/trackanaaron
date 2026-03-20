@@ -83,9 +83,11 @@ export default async function handler(req, res) {
     const next = getNextCheckpoint(routeMile);
     const locationStr = next ? `${(next.mile - routeMile).toFixed(1)} mi to ${next.name}` : "approaching finish 🏁";
     const movingAvgSpeed = req.body?.movingAvgSpeed;
-    const speedStr = movingAvgSpeed ? ` · ${movingAvgSpeed} avg` : "";
+    const currentSpeed = req.body?.currentSpeed;
+    const speedStr = movingAvgSpeed ? ` · avg ${movingAvgSpeed}` : "";
+    const currentStr = currentSpeed ? ` · now ${currentSpeed}` : "";
     const title = "🏃 Aaron Update";
-    const body = `Mile ${routeMile.toFixed(1)} · ${pct}% · ${locationStr}${speedStr}`;
+    const body = `Mile ${routeMile.toFixed(1)} · ${pct}% · ${locationStr}${speedStr}${currentStr}`;
 
     const pushResult = await sendWebPush(title, body);
 
