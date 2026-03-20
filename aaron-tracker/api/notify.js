@@ -96,12 +96,19 @@ function getNextStage(routeMile) {
   return null;
 }
 
-function todaysJournalEntries(entries) {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  return (entries || []).filter((e) => e.createdAt?.slice(0, 10) === today);
+// Use Inuvik local date (MDT = UTC-6) — the evening cron fires at 3:03 AM UTC
+// which is 9:03 PM the *previous* calendar day in Inuvik, so UTC dates don't match.
+function inuvikDateStr(isoStr) {
+  const d = new Date(new Date(isoStr).getTime() - 6 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
 }
 
-function buildEmail(data, type, recipientEmail, { dayMiles, journalEntries }) {
+function todaysJournalEntries(entries) {
+  const today = inuvikDateStr(new Date().toISOString());
+  return (entries || []).filter((e) => e.createdAt && inuvikDateStr(e.createdAt) === today);
+}
+
+function buildEmail(data, type, recipientEmail, { dayMiles, dayAvgSpeed, journalEntries }) {
   const pct = progressPct(data.routeMile);
   const nextStage = getNextStage(data.routeMile);
   const token = Buffer.from(recipientEmail).toString("base64url");
@@ -126,8 +133,9 @@ function buildEmail(data, type, recipientEmail, { dayMiles, journalEntries }) {
 
   const dayStatsHtml = (type === "evening" && dayMiles !== null && !isNaN(dayMiles) && dayMiles > 0) ? `
     <div style="background:#0d2a1e;border:1px solid #1e4a3e;border-radius:8px;padding:14px;margin-bottom:16px">
-      <div style="font-size:10px;color:#00c896;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px">Today's Progress</div>
-      <div style="font-size:22px;color:#fff;font-weight:bold">${dayMiles.toFixed(1)} <span style="font-size:13px;color:#00c896">miles covered today</span></div>
+      <div style="font-size:10px;color:#00c896;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Today's Progress</div>
+      <div style="font-size:22px;color:#fff;font-weight:bold;margin-bottom:4px">${dayMiles.toFixed(1)} <span style="font-size:13px;color:#00c896">miles covered today</span></div>
+      ${dayAvgSpeed ? `<div style="font-size:13px;color:#4a9eff">Avg moving speed: ${dayAvgSpeed} mph</div>` : ""}
     </div>` : "";
 
   const journalHtml = (type === "evening" && journalEntries.length > 0) ? `
@@ -163,8 +171,7 @@ function buildEmail(data, type, recipientEmail, { dayMiles, journalEntries }) {
 
     <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
       ${statRow("Race Status", data.status)}
-      ${statRow("Current Speed", data.currentSpeed)}
-      ${statRow("Moving Avg Speed", data.movingAvgSpeed)}
+      ${type === "evening" && dayAvgSpeed ? statRow("Today's Avg Speed", `${dayAvgSpeed} mph`) : statRow("Moving Avg Speed", data.movingAvgSpeed)}
       ${statRow("Total Moving Time", data.movingTime)}
       ${statRow("Total Stopped Time", data.stoppedTime)}
       ${statRow("Last Update", data.lastUpdate)}
@@ -214,22 +221,23 @@ export default async function handler(req, res) {
     // Load state file
     const { data: state, sha: stateSha } = await readFile("data/notify-state.json");
 
-    // Morning: save day-start snapshot
+    // Morning: save day-start snapshot (use Inuvik date so evening cron matches)
     let dayMiles = null;
+    const inuvikToday = inuvikDateStr(new Date().toISOString());
     if (type === "morning") {
       await writeFile("data/notify-state.json", {
         ...(state || {}),
         dayStartMile: currentMile,
-        dayStartDate: new Date().toISOString().slice(0, 10),
+        dayStartDate: inuvikToday,
         lastMile: currentMile,
         updatedAt: new Date().toISOString(),
       }, stateSha);
     }
 
-    // Evening: compute miles covered today
+    // Evening: compute miles covered today (compare Inuvik dates — cron fires at
+    // 3:03 AM UTC = 9:03 PM MDT, so UTC date is already tomorrow vs morning's UTC date)
     if (type === "evening") {
-      const today = new Date().toISOString().slice(0, 10);
-      if (state?.dayStartDate === today && typeof state?.dayStartMile === "number") {
+      if (state?.dayStartDate === inuvikToday && typeof state?.dayStartMile === "number") {
         dayMiles = currentMile - state.dayStartMile;
       }
       await writeFile("data/notify-state.json", {
@@ -239,17 +247,32 @@ export default async function handler(req, res) {
       }, stateSha);
     }
 
-    // Fetch today's journal entries for evening email
+    // Fetch today's journal entries + day stats from track history for evening email
     let journalEntries = [];
+    let dayAvgSpeed = null;
     if (type === "evening") {
-      const { data: journal } = await readFile("data/journal.json");
+      const [{ data: journal }, { data: histPoints }] = await Promise.all([
+        readFile("data/journal.json"),
+        readFile("data/track-history.json"),
+      ]);
       journalEntries = todaysJournalEntries(journal);
+
+      // Compute day avg speed from track history (Inuvik date match)
+      const todayPoints = (histPoints || []).filter(
+        (pt) => pt.avg && inuvikDateStr(pt.t) === inuvikToday
+      );
+      if (todayPoints.length > 0) {
+        const speeds = todayPoints.map((pt) => parseFloat(pt.avg)).filter((s) => !isNaN(s) && s > 0);
+        if (speeds.length > 0) {
+          dayAvgSpeed = (speeds.reduce((a, b) => a + b, 0) / speeds.length).toFixed(1);
+        }
+      }
     }
 
     // Test mode: send only to a single address, skip subscriber list
     const testEmail = req.body?.testEmail;
     if (testEmail) {
-      const { subject, html: htmlBody } = buildEmail(data, type, testEmail, { dayMiles, journalEntries });
+      const { subject, html: htmlBody } = buildEmail(data, type, testEmail, { dayMiles, dayAvgSpeed, journalEntries });
       const emailRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -275,7 +298,7 @@ export default async function handler(req, res) {
 
     let sent = 0;
     for (const email of list) {
-      const { subject, html: htmlBody } = buildEmail(data, type, email, { dayMiles, journalEntries });
+      const { subject, html: htmlBody } = buildEmail(data, type, email, { dayMiles, dayAvgSpeed, journalEntries });
       const emailRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
