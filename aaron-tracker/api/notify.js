@@ -108,6 +108,63 @@ function todaysJournalEntries(entries) {
   return (entries || []).filter((e) => e.createdAt && inuvikDateStr(e.createdAt) === today);
 }
 
+function buildConclusionEmail(recipientEmail, { routeMile, movingTime, stoppedTime }) {
+  const token = Buffer.from(recipientEmail).toString("base64url");
+  const unsubUrl = `${SITE_URL}/api/subscribe?email=${encodeURIComponent(recipientEmail)}&token=${token}`;
+  const subject = `🏁 Race Complete — ${ATHLETE_NAME}`;
+  const pct = routeMile ? ((parseFloat(routeMile) / TOTAL_MILES) * 100).toFixed(1) : null;
+
+  const html = `<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0e1a;font-family:Georgia,serif;color:#e8eaf6">
+<div style="max-width:540px;margin:0 auto;padding:20px 16px">
+  <div style="background:linear-gradient(135deg,#0d1b3e,#0a0e1a);border:1px solid #1e3a6e;border-radius:12px;padding:28px">
+    <div style="font-size:10px;letter-spacing:4px;color:#4a9eff;text-transform:uppercase;margin-bottom:6px">2026 Race · Complete</div>
+    <h1 style="margin:0 0 4px;font-size:20px;font-weight:normal;color:#fff">${ATHLETE_NAME}</h1>
+    <div style="color:#7a9cc8;font-size:13px;margin-bottom:20px">${RACE_NAME} · Arctic Canada</div>
+
+    <div style="background:#111827;border-radius:8px;padding:20px;margin-bottom:16px">
+      <div style="font-size:10px;color:#4a6a8a;text-transform:uppercase;letter-spacing:2px;margin-bottom:14px">Race Summary</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:10px;color:#4a6a8a;text-transform:uppercase;letter-spacing:1px">Distance</div>
+          <div style="font-size:22px;color:#4a9eff;font-weight:bold;margin-top:2px">${routeMile || "66.4"} mi</div>
+          ${pct ? `<div style="font-size:11px;color:#4a6a8a">${pct}% of 170.8 mi</div>` : ""}
+        </div>
+        <div>
+          <div style="font-size:10px;color:#4a6a8a;text-transform:uppercase;letter-spacing:1px">Result</div>
+          <div style="font-size:15px;color:#f0a040;margin-top:4px">Withdrew</div>
+          <div style="font-size:11px;color:#4a6a8a">Day 3 · Peel River</div>
+        </div>
+        ${movingTime ? `<div><div style="font-size:10px;color:#4a6a8a;text-transform:uppercase;letter-spacing:1px">Moving Time</div><div style="font-size:14px;color:#e8eaf6;margin-top:4px">${movingTime}</div></div>` : ""}
+        ${stoppedTime ? `<div><div style="font-size:10px;color:#4a6a8a;text-transform:uppercase;letter-spacing:1px">Stopped Time</div><div style="font-size:14px;color:#e8eaf6;margin-top:4px">${stoppedTime}</div></div>` : ""}
+      </div>
+    </div>
+
+    <div style="background:#0d2a1e;border:1px solid #1e4a3e;border-radius:8px;padding:16px;margin-bottom:20px">
+      <div style="font-size:14px;color:#c8d4f0;line-height:1.7">
+        Aaron covered ${routeMile || "66.4"} miles through Canada's Arctic in 3 days — carrying all his gear through the Yukon wilderness. His determination throughout this race is something to be proud of.<br><br>
+        Thank you so much for following along and cheering him on. The full story is on the tracker — including his race journal.
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-bottom:20px">
+      <a href="${SITE_URL}" style="background:linear-gradient(135deg,#1a5fc8,#0d3a8e);color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:13px;letter-spacing:1px;display:inline-block">Read the Full Story →</a>
+    </div>
+    <div style="border-top:1px solid #1e3a6e;padding-top:16px;text-align:center">
+      <div style="font-size:12px;color:#7a9cc8;margin-bottom:8px">Aaron ran in support of South Sudan Medical Relief</div>
+      <a href="${DONATE_URL}" style="color:#00c896;font-size:13px;text-decoration:none">Donate to SSMR →</a>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:12px;font-size:11px;color:#2a3a5a">
+    <a href="${unsubUrl}" style="color:#2a3a5a">Unsubscribe</a>
+  </div>
+</div>
+</body></html>`;
+
+  return { subject, html };
+}
+
 function buildEmail(data, type, recipientEmail, { dayMiles, dayAvgSpeed, journalEntries }) {
   const pct = progressPct(data.routeMile);
   const nextStage = getNextStage(data.routeMile);
@@ -205,6 +262,53 @@ export default async function handler(req, res) {
   }
 
   const type = req.query.type || req.body?.type || "update";
+
+  // ── Conclusion notification (race complete) ──────────────────────────────
+  if (type === "conclusion") {
+    try {
+      // Fetch final stats from Tracklead
+      const trackRes = await fetch(
+        "https://trackleaders.com/6633ultra26i.php?name=Aaron_Rabinowitz",
+        { headers: { "User-Agent": "Mozilla/5.0", Accept: "text/html" } }
+      );
+      const html = await trackRes.text();
+      const data = parseAthleteData(html);
+
+      // Web push
+      const pushResult = await sendWebPush(
+        "🏁 Aaron's race is complete",
+        `${data.routeMile || "66.4"} miles in 3 days through Canada's Arctic. Read the full story on the tracker.`
+      ).catch(() => ({ sent: 0, removed: 0 }));
+
+      // Email all subscribers
+      const { data: subscribers } = await readFile("data/subscribers.json");
+      const list = subscribers || [];
+      const testEmail = req.body?.testEmail;
+      if (testEmail) {
+        const { subject, html: htmlBody } = buildConclusionEmail(testEmail, { routeMile: data.routeMile, movingTime: data.movingTime, stoppedTime: data.stoppedTime });
+        const r = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev", to: testEmail, subject: `[TEST] ${subject}`, html: htmlBody }),
+        });
+        return res.status(200).json({ ok: r.ok, test: true, to: testEmail });
+      }
+
+      let sent = 0;
+      for (const email of list) {
+        const { subject, html: htmlBody } = buildConclusionEmail(email, { routeMile: data.routeMile, movingTime: data.movingTime, stoppedTime: data.stoppedTime });
+        const r = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev", to: email, subject, html: htmlBody }),
+        });
+        if (r.ok) sent++;
+      }
+      return res.status(200).json({ ok: true, sent, total: list.length, pushSent: pushResult.sent });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
 
   try {
     const trackRes = await fetch(

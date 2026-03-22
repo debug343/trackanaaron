@@ -980,6 +980,14 @@ export default function AaronTracker() {
               </div>
               <div style={{ marginTop: "10px", fontSize: "12px", color: "#5a8aaa" }}>📍 {getCheckpoint(mile)}</div>
             </div>
+            <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "16px", marginTop: "8px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={handleShare} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #1e3a6e", borderRadius: "20px", color: shareCopied ? "#00c896" : "#7a9cc8", padding: "9px 20px", fontSize: "13px", cursor: "pointer", letterSpacing: "1px", fontFamily: "inherit" }}>
+                {shareCopied ? "✓ Link Copied!" : "⎘ Share Aaron's Story"}
+              </button>
+              <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={{ background: "linear-gradient(135deg, #1a6e3a, #0d4a26)", color: "#90ffbc", textDecoration: "none", padding: "9px 20px", borderRadius: "20px", fontSize: "13px", letterSpacing: "1px" }}>
+                Donate to SSMR →
+              </a>
+            </div>
           </div>
         </div>
 
@@ -1293,14 +1301,42 @@ export default function AaronTracker() {
                 {postingEntry ? "Posting..." : "Post Entry"}
               </button>
               <button onClick={() => sendUpdateNow(false)} disabled={sendingUpdate} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a9eff", padding: "12px 18px", fontSize: "14px", cursor: "pointer", minHeight: "48px", flex: "1" }}>
-                {sendingUpdate ? "Sending..." : "Send to All Subscribers"}
+                {sendingUpdate ? "Sending..." : "Send Update Email"}
               </button>
             </div>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
               <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="your@email.com" style={{ ...inputStyle, flex: "1", minWidth: "160px" }} />
               <button onClick={() => sendUpdateNow(true)} disabled={sendingUpdate || !testEmail.trim()} style={{ background: "none", border: "1px solid #2a4a6a", borderRadius: "6px", color: "#7a9cc8", padding: "12px 14px", fontSize: "14px", cursor: "pointer", minHeight: "48px" }}>
                 Send Test
               </button>
+            </div>
+            <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "12px" }}>
+              <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>Race Conclusion</div>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                <button onClick={async () => {
+                  setSendingUpdate(true); setSendStatus("");
+                  try {
+                    const res = await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "conclusion", password: adminPwd }) });
+                    const d = await res.json();
+                    setSendStatus(res.ok ? `Conclusion sent to ${d.sent} subscriber${d.sent !== 1 ? "s" : ""} + ${d.pushSent || 0} push` : d.error || "Failed");
+                  } catch { setSendStatus("Network error"); }
+                  setSendingUpdate(false);
+                }} disabled={sendingUpdate} style={{ background: "linear-gradient(135deg, #1a4e2a, #0d3a1a)", color: "#90ffbc", border: "none", borderRadius: "6px", padding: "10px 18px", fontSize: "13px", cursor: "pointer", minHeight: "44px" }}>
+                  {sendingUpdate ? "Sending..." : "🏁 Send Race Conclusion to All"}
+                </button>
+                <button onClick={async () => {
+                  if (!testEmail.trim()) return;
+                  setSendingUpdate(true); setSendStatus("");
+                  try {
+                    const res = await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "conclusion", password: adminPwd, testEmail: testEmail.trim() }) });
+                    const d = await res.json();
+                    setSendStatus(res.ok ? `Test conclusion sent to ${testEmail}` : d.error || "Failed");
+                  } catch { setSendStatus("Network error"); }
+                  setSendingUpdate(false);
+                }} disabled={sendingUpdate || !testEmail.trim()} style={{ background: "none", border: "1px solid #2a4a6a", borderRadius: "6px", color: "#7a9cc8", padding: "10px 14px", fontSize: "13px", cursor: "pointer", minHeight: "44px" }}>
+                  Test Conclusion
+                </button>
+              </div>
             </div>
             {sendStatus && <div style={{ fontSize: "12px", color: "#00c896", marginTop: "8px" }}>{sendStatus}</div>}
           </div>}
