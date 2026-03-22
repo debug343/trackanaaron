@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { upload } from "@vercel/blob/client";
 
 // ── Web Push helpers ──────────────────────────────────────────────────────────
 function isIOS() {
@@ -417,6 +418,9 @@ export default function AaronTracker() {
   const [editTitle, setEditTitle] = useState("");
   const [editText, setEditText] = useState("");
   const [editEmbed, setEditEmbed] = useState("");
+  const [editVideoUrl, setEditVideoUrl] = useState("");
+  const [newVideoUrl, setNewVideoUrl] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(null); // null | "uploading" | "done" | "error"
 
   const [subEmail, setSubEmail] = useState("");
   const [subStatus, setSubStatus] = useState("");
@@ -666,11 +670,11 @@ export default function AaronTracker() {
       const res = await fetch("/api/journal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle.trim(), text: newText.trim(), embed: newEmbed.trim(), password: adminPwd, raceData: liveData || null }),
+        body: JSON.stringify({ title: newTitle.trim(), text: newText.trim(), embed: newEmbed.trim(), videoUrl: newVideoUrl || null, password: adminPwd, raceData: liveData || null }),
       });
       if (res.status === 401) { setEntryError("Wrong password."); setIsAdmin(false); }
       else if (!res.ok) { setEntryError("Failed to post."); }
-      else { setNewTitle(""); setNewText(""); setNewEmbed(""); fetchJournal(); }
+      else { setNewTitle(""); setNewText(""); setNewEmbed(""); setNewVideoUrl(""); setUploadProgress(null); fetchJournal(); }
     } catch { setEntryError("Network error."); }
     setPostingEntry(false);
   }
@@ -681,7 +685,7 @@ export default function AaronTracker() {
       await fetch("/api/journal", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, title: editTitle, text: editText, embed: editEmbed, password: adminPwd }),
+        body: JSON.stringify({ id, title: editTitle, text: editText, embed: editEmbed, videoUrl: editVideoUrl || null, password: adminPwd }),
       });
       setEditingId(null);
       fetchJournal();
@@ -822,7 +826,7 @@ export default function AaronTracker() {
   async function handleShare() {
     const shareData = {
       title: `${ATHLETE_NAME} — ${RACE_NAME}`,
-      text: `Aaron Rabinowitz is racing 170.8 miles through Canada's Arctic in the 6633 Northern Lights Ultra — and raising money for South Sudan Medical Relief. Follow his live progress here:`,
+      text: `Aaron Rabinowitz covered 66.4 miles of Canada's Arctic in the 6633 Northern Lights Ultra before a medical withdrawal. The race was cancelled due to extreme weather — no one finished. Read his story and support South Sudan Medical Relief:`,
       url: "https://trackanaaron.vercel.app",
     };
     if (navigator.share) {
@@ -937,7 +941,7 @@ export default function AaronTracker() {
               </div>
               <div>
                 <div style={statLabel}>Result</div>
-                <div style={{ fontSize: "15px", color: "#f0a040", fontWeight: "500" }}>Withdrew</div>
+                <div style={{ fontSize: "15px", color: "#f0a040", fontWeight: "500" }}>Medical Withdrawal</div>
                 <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "3px" }}>Day 3 · Peel River</div>
               </div>
               {liveData?.movingTime && <div>
@@ -959,9 +963,9 @@ export default function AaronTracker() {
               {leaderboard && <div>
                 <div style={statLabel}>Race Field</div>
                 <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>
-                  {leaderboard.total - leaderboard.scratched} <span style={{ fontSize: "11px", color: "#4a6a8a" }}>finished</span>
+                  0 <span style={{ fontSize: "11px", color: "#4a6a8a" }}>finishers</span>
                 </div>
-                <div style={{ fontSize: "11px", color: "#ff8080", marginTop: "2px" }}>{leaderboard.scratched} withdrew of {leaderboard.total}</div>
+                <div style={{ fontSize: "11px", color: "#ff8080", marginTop: "2px" }}>Race cancelled · extreme weather</div>
               </div>}
               <div>
                 <div style={statLabel}>Days on Course</div>
@@ -1291,6 +1295,40 @@ export default function AaronTracker() {
               <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Write a journal entry..." rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical", width: "100%", boxSizing: "border-box" }} />
               <textarea value={newEmbed} onChange={(e) => setNewEmbed(e.target.value)} placeholder="Embed HTML (optional — paste iframe code)" rows={3} style={{ ...inputStyle, lineHeight: "1.5", resize: "vertical", fontSize: "11px", fontFamily: "monospace" }} />
             </div>
+            {/* Video upload */}
+            <div style={{ marginBottom: "14px" }}>
+              <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>Video (optional)</div>
+              {newVideoUrl ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <video src={newVideoUrl} controls style={{ maxWidth: "100%", borderRadius: "6px", maxHeight: "180px" }} />
+                  <button onClick={() => { setNewVideoUrl(""); setUploadProgress(null); }} style={{ background: "none", border: "1px solid #2a2a4a", borderRadius: "5px", color: "#4a4a6a", cursor: "pointer", fontSize: "13px", padding: "6px 12px" }}>Remove</button>
+                </div>
+              ) : (
+                <label style={{ display: "inline-block", cursor: "pointer" }}>
+                  <div style={{ background: "#0a0e1a", border: "1px dashed #1e3a6e", borderRadius: "6px", padding: "14px 20px", fontSize: "13px", color: uploadProgress === "uploading" ? "#4a9eff" : "#4a6a8a", textAlign: "center" }}>
+                    {uploadProgress === "uploading" ? "⟳ Uploading..." : uploadProgress === "error" ? "⚠ Upload failed — try again" : "＋ Choose video file (mp4, mov, webm)"}
+                  </div>
+                  <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{ display: "none" }} disabled={uploadProgress === "uploading"}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadProgress("uploading");
+                      try {
+                        const blob = await upload(file.name, file, {
+                          access: "public",
+                          handleUploadUrl: "/api/upload",
+                          clientPayload: adminPwd,
+                        });
+                        setNewVideoUrl(blob.url);
+                        setUploadProgress("done");
+                      } catch {
+                        setUploadProgress("error");
+                      }
+                    }}
+                  />
+                </label>
+              )}
+            </div>
             <div style={{ background: "#0a0e1a", border: "1px solid #1e2a4e", borderRadius: "6px", padding: "10px 12px", marginBottom: "14px" }}>
               <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Fundraising Link</div>
               <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#4a9eff", fontSize: "11px", wordBreak: "break-all" }}>{DONATE_URL}</a>
@@ -1357,6 +1395,7 @@ export default function AaronTracker() {
                     <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" style={inputStyle} />
                     <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical" }} />
                     <textarea value={editEmbed} onChange={(e) => setEditEmbed(e.target.value)} placeholder="Embed HTML (optional — paste iframe code)" rows={3} style={{ ...inputStyle, lineHeight: "1.5", resize: "vertical", fontSize: "11px", fontFamily: "monospace" }} />
+                    <input value={editVideoUrl} onChange={(e) => setEditVideoUrl(e.target.value)} placeholder="Video URL (leave blank to keep existing)" style={{ ...inputStyle, fontSize: "11px", fontFamily: "monospace" }} />
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button onClick={() => saveEditEntry(entry.id)} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 18px", fontSize: "13px", cursor: "pointer" }}>Save</button>
                       <button onClick={() => setEditingId(null)} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "6px", color: "#4a9eff", padding: "8px 14px", fontSize: "13px", cursor: "pointer" }}>Cancel</button>
@@ -1371,12 +1410,17 @@ export default function AaronTracker() {
                       </div>
                       {isAdmin && (
                         <div style={{ display: "flex", gap: "8px" }}>
-                          <button onClick={() => { setEditingId(entry.id); setEditTitle(entry.title); setEditText(entry.text); setEditEmbed(entry.embed || ""); }} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "5px", color: "#4a9eff", cursor: "pointer", fontSize: "13px", padding: "6px 12px", minHeight: "36px" }}>Edit</button>
+                          <button onClick={() => { setEditingId(entry.id); setEditTitle(entry.title); setEditText(entry.text); setEditEmbed(entry.embed || ""); setEditVideoUrl(entry.videoUrl || ""); }} style={{ background: "none", border: "1px solid #1e3a6e", borderRadius: "5px", color: "#4a9eff", cursor: "pointer", fontSize: "13px", padding: "6px 12px", minHeight: "36px" }}>Edit</button>
                           <button onClick={() => deleteJournalEntry(entry.id)} style={{ background: "none", border: "1px solid #2a2a4a", borderRadius: "5px", color: "#4a4a6a", cursor: "pointer", fontSize: "18px", padding: "4px 10px", minHeight: "36px" }}>×</button>
                         </div>
                       )}
                     </div>
                     <p style={{ margin: "0 0 12px", lineHeight: "1.8", color: "#c8d4f0", fontSize: "15px" }}>{entry.text}</p>
+                    {entry.videoUrl && (
+                      <div style={{ margin: "12px 0" }}>
+                        <video src={entry.videoUrl} controls playsInline style={{ width: "100%", borderRadius: "8px", maxHeight: "480px", background: "#000" }} />
+                      </div>
+                    )}
                     {entry.embed && (
                       <div style={{ margin: "12px 0", display: "flex", justifyContent: "center" }} dangerouslySetInnerHTML={{ __html: entry.embed }} />
                     )}

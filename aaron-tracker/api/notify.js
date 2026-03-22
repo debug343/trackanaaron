@@ -111,7 +111,7 @@ function todaysJournalEntries(entries) {
 function buildConclusionEmail(recipientEmail, { routeMile, movingTime, stoppedTime }) {
   const token = Buffer.from(recipientEmail).toString("base64url");
   const unsubUrl = `${SITE_URL}/api/subscribe?email=${encodeURIComponent(recipientEmail)}&token=${token}`;
-  const subject = `🏁 Race Complete — ${ATHLETE_NAME}`;
+  const subject = `🏁 Race Update — ${ATHLETE_NAME}`;
   const pct = routeMile ? ((parseFloat(routeMile) / TOTAL_MILES) * 100).toFixed(1) : null;
 
   const html = `<!DOCTYPE html>
@@ -133,7 +133,7 @@ function buildConclusionEmail(recipientEmail, { routeMile, movingTime, stoppedTi
         </div>
         <div>
           <div style="font-size:10px;color:#4a6a8a;text-transform:uppercase;letter-spacing:1px">Result</div>
-          <div style="font-size:15px;color:#f0a040;margin-top:4px">Withdrew</div>
+          <div style="font-size:15px;color:#f0a040;margin-top:4px">Medical Withdrawal</div>
           <div style="font-size:11px;color:#4a6a8a">Day 3 · Peel River</div>
         </div>
         ${movingTime ? `<div><div style="font-size:10px;color:#4a6a8a;text-transform:uppercase;letter-spacing:1px">Moving Time</div><div style="font-size:14px;color:#e8eaf6;margin-top:4px">${movingTime}</div></div>` : ""}
@@ -143,7 +143,7 @@ function buildConclusionEmail(recipientEmail, { routeMile, movingTime, stoppedTi
 
     <div style="background:#0d2a1e;border:1px solid #1e4a3e;border-radius:8px;padding:16px;margin-bottom:20px">
       <div style="font-size:14px;color:#c8d4f0;line-height:1.7">
-        Aaron covered ${routeMile || "66.4"} miles through Canada's Arctic in 3 days — carrying all his gear through the Yukon wilderness. His determination throughout this race is something to be proud of.<br><br>
+        Aaron covered ${routeMile || "66.4"} miles through Canada's Arctic in 3 days before a medical withdrawal — and he wasn't alone. The race was ultimately cancelled due to extreme weather; no one reached the finish line. Aaron's grit through impossible conditions is something to be proud of.<br><br>
         Thank you so much for following along and cheering him on. The full story is on the tracker — including his race journal.
       </div>
     </div>
@@ -276,8 +276,8 @@ export default async function handler(req, res) {
 
       // Web push
       const pushResult = await sendWebPush(
-        "🏁 Aaron's race is complete",
-        `${data.routeMile || "66.4"} miles in 3 days through Canada's Arctic. Read the full story on the tracker.`
+        "🏁 Race update — Aaron Rabinowitz",
+        `Medical withdrawal after 66.4 miles in 3 days. The race was cancelled due to extreme weather — no one finished. Read the full story.`
       ).catch(() => ({ sent: 0, removed: 0 }));
 
       // Email all subscribers
