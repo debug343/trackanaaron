@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { title, text, password, raceData, embed, createdAt } = req.body || {};
+    const { title, text, password, raceData, embed, videoUrl, createdAt } = req.body || {};
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -20,6 +20,7 @@ export default async function handler(req, res) {
       title: title?.trim() || entryDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }),
       text: text.trim(),
       embed: embed?.trim() || null,
+      videoUrl: videoUrl?.trim() || null,
       raceData: raceData || null,
       createdAt: entryDate.toISOString(),
     };
@@ -29,14 +30,14 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "PUT") {
-    const { id, title, text, password, embed } = req.body || {};
+    const { id, title, text, password, embed, videoUrl } = req.body || {};
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ error: "Unauthorized" });
     }
     if (!text?.trim()) return res.status(400).json({ error: "Text required" });
     const { data: entries, sha } = await readFile("data/journal.json");
     const updated = (entries || []).map((e) =>
-      e.id === id ? { ...e, title: title?.trim() || e.title, text: text.trim(), embed: embed?.trim() || null } : e
+      e.id === id ? { ...e, title: title?.trim() || e.title, text: text.trim(), embed: embed?.trim() || null, videoUrl: videoUrl?.trim() || null } : e
     );
     await writeFile("data/journal.json", updated, sha);
     return res.status(200).json({ ok: true });
