@@ -894,9 +894,9 @@ export default function AaronTracker() {
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 20% 50%, rgba(0,200,150,0.07) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(100,50,200,0.08) 0%, transparent 50%)", pointerEvents: "none" }} />
         <div style={{ position: "relative", maxWidth: "860px", margin: "0 auto" }}>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "8px" }}>Live Race Tracker</div>
+            <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#4a9eff", textTransform: "uppercase", marginBottom: "8px" }}>2026 Race · Complete</div>
             <h1 style={{ margin: "0 0 6px", fontSize: "clamp(26px, 5vw, 42px)", fontWeight: "normal", color: "#fff" }}>{ATHLETE_NAME}</h1>
-            <div style={{ color: "#7a9cc8", fontSize: "14px", marginBottom: "20px" }}>{RACE_NAME} · 170.8 mi · Arctic Canada · March 18–22, 2026</div>
+            <div style={{ color: "#7a9cc8", fontSize: "14px", marginBottom: "20px" }}>{RACE_NAME} · 170.8 mi · Arctic Canada · March 17–19, 2026</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "14px", flexWrap: "wrap" }}>
               <button onClick={handleShare} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #1e3a6e", borderRadius: "20px", color: shareCopied ? "#00c896" : "#7a9cc8", padding: "9px 20px", fontSize: "13px", cursor: "pointer", letterSpacing: "1px", fontFamily: "inherit" }}>
                 {shareCopied ? "✓ Link Copied!" : "⎘ Share Aaron's Race"}
@@ -925,67 +925,66 @@ export default function AaronTracker() {
           </div>
         )}
 
-        {/* ── ELEVATION ── */}
+        {/* ── RACE SUMMARY ── */}
         <div style={{ marginBottom: "40px" }}>
-          <div style={sectionTitle}>Course Elevation Profile</div>
-          <div style={{ ...card, padding: "16px 12px 8px" }}>
-            <ElevationProfile
-              currentMile={mile}
-              dailyStats={dailyStatsList}
-              otherAthletes={leaderboard?.athletes
-                ? leaderboard.athletes.filter((_, i) => i !== (leaderboard.aaronRank - 1))
-                : []}
-              scratchedAthletes={(leaderboard?.scratchedAthletes || []).filter(a => !a.name.toLowerCase().includes("aaron"))}
-            />
-          </div>
-        </div>
-
-        {/* ── ABOUT ── */}
-        <div style={{ marginBottom: "40px" }}>
-          <div style={sectionTitle}>What is he up to now?!</div>
-          <div style={{ ...card, lineHeight: "1.9", fontSize: "15px", color: "#c8d4f0" }}>
-            <p style={{ margin: "0 0 14px" }}>
-              Whether you know Aaron as a friend, a brother, a son, a grandson, or an uncle — we're all here for the same reason: to follow along and cheer him on as he does something truly remarkable.
-            </p>
-            <p style={{ margin: "0 0 14px" }}>
-              Aaron is running the <strong style={{ color: "#fff" }}>6633 Northern Lights Ultra</strong> — 170.8 miles of self-supported racing through Canada's Arctic, from Eagle Plains, Yukon to Inuvik, Northwest Territories. He's carrying an emergency beacon and a satellite phone so he can check in at each checkpoint, and we can all follow his progress right here.
-            </p>
-            <p style={{ margin: "0 0 20px" }}>
-              He's doing this in support of <strong style={{ color: "#fff" }}>South Sudan Medical Relief (SSMR)</strong> — an incredible organization that has spent decades delivering critical medical care to communities in Old Fangak, Jonglei State, South Sudan. If you feel moved to support their work, please consider donating below.
-            </p>
-            {/* Photo strip */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
-              {["/aaron-thumbsup.jpeg", "/aaron-goodluck.jpeg", "/aaron-facetime.jpeg", "/aaron-packing.jpeg"].map((src, i) => (
-                <div key={i} style={{ height: "clamp(70px, 20vw, 140px)", borderRadius: "8px", overflow: "hidden", border: "1px solid #1e3a6e", boxShadow: "0 3px 12px rgba(0,0,0,0.5)" }}>
-                  <img src={src} alt="Aaron" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={sectionTitle}>Race Summary</div>
+          <div style={{ ...card, background: "linear-gradient(135deg, #0a1228, #0d1b3e)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "20px", marginBottom: "24px" }}>
+              <div>
+                <div style={statLabel}>Distance Covered</div>
+                <div style={{ fontSize: "28px", fontWeight: "bold", color: "#4a9eff", lineHeight: "1.1" }}>{mile !== null ? `${mile} mi` : "66.4 mi"}</div>
+                <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "3px" }}>of {TOTAL_MILES} mi · {mile !== null ? pct : "38.9"}%</div>
+              </div>
+              <div>
+                <div style={statLabel}>Result</div>
+                <div style={{ fontSize: "15px", color: "#f0a040", fontWeight: "500" }}>Withdrew</div>
+                <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "3px" }}>Day 3 · Peel River</div>
+              </div>
+              {liveData?.movingTime && <div>
+                <div style={statLabel}>Moving Time</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.movingTime}</div>
+              </div>}
+              {liveData?.stoppedTime && <div>
+                <div style={statLabel}>Stopped Time</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.stoppedTime}</div>
+              </div>}
+              {liveData?.elevationGain && <div>
+                <div style={statLabel}>Elevation Gain</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.elevationGain}</div>
+              </div>}
+              {liveData?.movingAvgSpeed && <div>
+                <div style={statLabel}>Avg Moving Speed</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>{liveData.movingAvgSpeed}</div>
+              </div>}
+              {leaderboard && <div>
+                <div style={statLabel}>Race Field</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>
+                  {leaderboard.total - leaderboard.scratched} <span style={{ fontSize: "11px", color: "#4a6a8a" }}>finished</span>
                 </div>
-              ))}
+                <div style={{ fontSize: "11px", color: "#ff8080", marginTop: "2px" }}>{leaderboard.scratched} withdrew of {leaderboard.total}</div>
+              </div>}
+              <div>
+                <div style={statLabel}>Days on Course</div>
+                <div style={{ fontSize: "15px", color: "#e8eaf6", fontWeight: "500" }}>3 days</div>
+                <div style={{ fontSize: "11px", color: "#4a6a8a", marginTop: "3px" }}>Mar 17–19, 2026</div>
+              </div>
+            </div>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "11px" }}>
+                <span style={{ color: "#4a6a8a" }}>Eagle Plains</span>
+                <span style={{ color: "#4a9eff", fontWeight: "bold" }}>{mile !== null ? pct : "38.9"}% of 170.8 mi completed</span>
+                <span style={{ color: "#4a6a8a" }}>Inuvik</span>
+              </div>
+              <div style={{ background: "#0a0e1a", borderRadius: "4px", height: "8px", overflow: "hidden" }}>
+                <div style={{ height: "100%", borderRadius: "4px", width: `${mile !== null ? pct : 38.9}%`, background: "linear-gradient(90deg, #1a5fc8, #4a9eff)" }} />
+              </div>
+              <div style={{ marginTop: "10px", fontSize: "12px", color: "#5a8aaa" }}>📍 {getCheckpoint(mile)}</div>
             </div>
           </div>
         </div>
 
-        {/* ── DONATE ── */}
-        <div style={{ marginBottom: "40px" }}>
-          <div style={sectionTitle}>Support the Cause</div>
-          <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #120a2e)", border: "1px solid #2a1a6e" }}>
-            <p style={{ margin: "0 0 6px", color: "#c8d4f0", fontSize: "15px", lineHeight: "1.8" }}>
-              Your donation directly supports South Sudan Medical Relief's mission to provide vital healthcare to one of the world's most underserved communities.
-            </p>
-            <p style={{ margin: "0 0 20px", color: "#7a9cc8", fontSize: "13px" }}>
-              💬 When donating, please mention <strong style={{ color: "#a0c4ff" }}>Aaron Rabinowitz</strong> in the donation comment box so he gets credit for inspiring your gift.
-            </p>
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
-              <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", background: "linear-gradient(135deg, #1a6e3a, #0d4a26)", color: "#90ffbc", textDecoration: "none", padding: "12px 28px", borderRadius: "6px", fontSize: "14px", letterSpacing: "1px" }}>
-                Donate to SSMR →
-              </a>
-              <a href="https://www.southsudanmedicalrelief.org" target="_blank" rel="noopener noreferrer" style={{ color: "#4a7aaa", fontSize: "13px", textDecoration: "none" }}>About SSMR →</a>
-              <a href={RACE_INFO_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#4a7aaa", fontSize: "13px", textDecoration: "none" }}>About the race →</a>
-            </div>
-          </div>
-        </div>
-
-        {/* ── CURRENT STATUS ── */}
-        <div style={{ marginBottom: "40px" }}>
+        {/* ── CURRENT STATUS — archived, kept for snapshot data only ── */}
+        {false && <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>Aaron's Current Status</div>
           <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap", justifyContent: "center" }}>
             <button onClick={fetchLiveData} disabled={loading} style={{ background: loading ? "#1e3a6e" : "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 28px", fontSize: "15px", cursor: loading ? "not-allowed" : "pointer", letterSpacing: "1px", boxShadow: "0 2px 12px rgba(26,95,200,0.3)", minHeight: "48px" }}>
@@ -1223,29 +1222,18 @@ export default function AaronTracker() {
               </div>
             </div>
           )}
-        </div>
-
-        {/* ── MAP ── */}
-        <div style={{ marginBottom: "40px" }}>
-          <div style={sectionTitle}>Course Map & All Athletes</div>
-          <div style={{ borderRadius: "10px", overflow: "hidden", border: "1px solid #1e3a6e", background: "#111827" }}>
-            <iframe src={MAP_URL} title="6633 Ultra Race Map" style={{ width: "100%", height: "clamp(300px, 60vw, 500px)", border: "none", display: "block" }} loading="lazy" />
-          </div>
-          <div style={{ marginTop: "8px", fontSize: "11px", color: "#2a4a6a", textAlign: "right" }}>
-            Map via <a href={MAP_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#2a4a8a", textDecoration: "none" }}>trackleaders.com</a>
-          </div>
-        </div>
+        </div>}
 
         {/* ── JOURNAL ── */}
         <div style={{ marginBottom: "40px" }}>
           <div style={sectionTitle}>Race Journal</div>
-          <p style={{ color: "#4a7aaa", fontSize: "14px", margin: "0 0 20px", lineHeight: "1.6" }}>Daily notes and updates from Aaron's team throughout the race.</p>
+          <p style={{ color: "#4a7aaa", fontSize: "14px", margin: "0 0 20px", lineHeight: "1.6" }}>Notes and updates from Aaron's team throughout the race.</p>
 
           {/* Race Update admin card */}
           {isAdmin && <div style={{ ...card, marginBottom: "16px" }}>
             <div style={{ fontSize: "11px", letterSpacing: "3px", color: raceUpdate ? "#c87800" : "#7a9cc8", textTransform: "uppercase", marginBottom: "12px" }}>📢 Race Update</div>
             <div style={{ fontSize: "13px", color: "#8a9cc8", marginBottom: "10px" }}>
-              Shown as a banner above the About section for all visitors. Clear to remove.
+              Shown as a banner above the Race Summary for all visitors. Clear to remove.
             </div>
             <textarea
               value={raceUpdateInput}
@@ -1293,14 +1281,12 @@ export default function AaronTracker() {
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
               <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title (optional)" style={inputStyle} />
               <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Write a journal entry..." rows={5} style={{ ...inputStyle, lineHeight: "1.7", resize: "vertical", width: "100%", boxSizing: "border-box" }} />
-              {liveData && (
-                <button onClick={generateNarrative} disabled={narrativeLoading} style={{ alignSelf: "flex-start", background: narrativeLoading ? "#2a1a4e" : "linear-gradient(135deg, #5a1a9e, #3a0a6e)", color: "#e0d0ff", border: "none", borderRadius: "5px", padding: "8px 16px", fontSize: "13px", cursor: narrativeLoading ? "not-allowed" : "pointer", letterSpacing: "1px", minHeight: "40px" }}>
-                  {narrativeLoading ? "✦ Writing..." : "✦ Generate Narrative from Live Data"}
-                </button>
-              )}
               <textarea value={newEmbed} onChange={(e) => setNewEmbed(e.target.value)} placeholder="Embed HTML (optional — paste iframe code)" rows={3} style={{ ...inputStyle, lineHeight: "1.5", resize: "vertical", fontSize: "11px", fontFamily: "monospace" }} />
             </div>
-            {liveData && <div style={{ fontSize: "12px", color: "#4a7aaa", marginBottom: "10px" }}>Current race snapshot will be attached.</div>}
+            <div style={{ background: "#0a0e1a", border: "1px solid #1e2a4e", borderRadius: "6px", padding: "10px 12px", marginBottom: "14px" }}>
+              <div style={{ fontSize: "10px", color: "#4a6a8a", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Fundraising Link</div>
+              <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#4a9eff", fontSize: "11px", wordBreak: "break-all" }}>{DONATE_URL}</a>
+            </div>
             {entryError && <div style={{ color: "#ff6060", fontSize: "12px", marginBottom: "10px" }}>{entryError}</div>}
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
               <button onClick={postJournalEntry} disabled={postingEntry || !newText.trim()} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 22px", fontSize: "15px", cursor: "pointer", minHeight: "48px", flex: "1" }}>
@@ -1477,6 +1463,64 @@ export default function AaronTracker() {
           </div>
         </div>
 
+        {/* ── ELEVATION ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Course Elevation Profile</div>
+          <div style={{ ...card, padding: "16px 12px 8px" }}>
+            <ElevationProfile
+              currentMile={mile}
+              dailyStats={dailyStatsList}
+              otherAthletes={leaderboard?.athletes
+                ? leaderboard.athletes.filter((_, i) => i !== (leaderboard.aaronRank - 1))
+                : []}
+              scratchedAthletes={(leaderboard?.scratchedAthletes || []).filter(a => !a.name.toLowerCase().includes("aaron"))}
+            />
+          </div>
+        </div>
+
+        {/* ── ABOUT ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>About Aaron</div>
+          <div style={{ ...card, lineHeight: "1.9", fontSize: "15px", color: "#c8d4f0" }}>
+            <p style={{ margin: "0 0 14px" }}>
+              Whether you know Aaron as a friend, a brother, a son, a grandson, or an uncle — this site exists because of the incredible thing he did.
+            </p>
+            <p style={{ margin: "0 0 14px" }}>
+              Aaron ran the <strong style={{ color: "#fff" }}>6633 Northern Lights Ultra</strong> — 170.8 miles of self-supported racing through Canada's Arctic, from Eagle Plains, Yukon to Inuvik, Northwest Territories. He carried an emergency beacon and a satellite phone, checking in at each checkpoint over three days.
+            </p>
+            <p style={{ margin: "0 0 20px" }}>
+              He ran in support of <strong style={{ color: "#fff" }}>South Sudan Medical Relief (SSMR)</strong> — an organization that has spent decades delivering critical medical care to communities in Old Fangak, Jonglei State, South Sudan. Please consider donating below.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+              {["/aaron-thumbsup.jpeg", "/aaron-goodluck.jpeg", "/aaron-facetime.jpeg", "/aaron-packing.jpeg"].map((src, i) => (
+                <div key={i} style={{ height: "clamp(70px, 20vw, 140px)", borderRadius: "8px", overflow: "hidden", border: "1px solid #1e3a6e", boxShadow: "0 3px 12px rgba(0,0,0,0.5)" }}>
+                  <img src={src} alt="Aaron" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── DONATE ── */}
+        <div style={{ marginBottom: "40px" }}>
+          <div style={sectionTitle}>Support the Cause</div>
+          <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #120a2e)", border: "1px solid #2a1a6e" }}>
+            <p style={{ margin: "0 0 6px", color: "#c8d4f0", fontSize: "15px", lineHeight: "1.8" }}>
+              Your donation directly supports South Sudan Medical Relief's mission to provide vital healthcare to one of the world's most underserved communities.
+            </p>
+            <p style={{ margin: "0 0 20px", color: "#7a9cc8", fontSize: "13px" }}>
+              💬 When donating, please mention <strong style={{ color: "#a0c4ff" }}>Aaron Rabinowitz</strong> in the donation comment box so he gets credit for inspiring your gift.
+            </p>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+              <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", background: "linear-gradient(135deg, #1a6e3a, #0d4a26)", color: "#90ffbc", textDecoration: "none", padding: "12px 28px", borderRadius: "6px", fontSize: "14px", letterSpacing: "1px" }}>
+                Donate to SSMR →
+              </a>
+              <a href="https://www.southsudanmedicalrelief.org" target="_blank" rel="noopener noreferrer" style={{ color: "#4a7aaa", fontSize: "13px", textDecoration: "none" }}>About SSMR →</a>
+              <a href={RACE_INFO_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#4a7aaa", fontSize: "13px", textDecoration: "none" }}>About the race →</a>
+            </div>
+          </div>
+        </div>
+
         {/* ── FACEBOOK ── */}
         <div style={{ marginBottom: "40px" }}>
           <div style={{ ...sectionTitle, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
@@ -1495,108 +1539,6 @@ export default function AaronTracker() {
           </div>
         </div>
 
-        {/* ── PUSH NOTIFICATIONS ── */}
-        {notifState !== "unsupported" && notifState !== "loading" && (
-          <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #0a0e1a)", marginBottom: "16px" }}>
-            <h2 style={{ margin: "0 0 4px", fontSize: "18px", fontWeight: "normal", color: "#fff" }}>🔔 Get Notified</h2>
-
-            {notifState === "ios-not-installed" && (
-              <>
-                <p style={{ margin: "0 0 16px", color: "#4a7aaa", fontSize: "13px", lineHeight: "1.6" }}>
-                  iPhone requires adding this page to your Home Screen before notifications work (iOS 16.4+, Safari only).
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
-                  {[
-                    ["1", "Safari", "Open this page in Safari (not Chrome)"],
-                    ["2", "↑ Share", "Tap the Share button in the bottom toolbar"],
-                    ["3", "Add to Home Screen", "Scroll down and tap Add to Home Screen"],
-                    ["4", "Open & Enable", "Open the app from your Home Screen, then tap Enable Notifications here"],
-                  ].map(([num, label, desc]) => (
-                    <div key={num} style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-                      <div style={{ flexShrink: 0, width: "24px", height: "24px", borderRadius: "50%", background: "#1a3a6e", border: "1px solid #2a5aae", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", color: "#4a9eff", fontWeight: "bold", marginTop: "1px" }}>{num}</div>
-                      <div>
-                        <div style={{ fontSize: "13px", color: "#fff", fontWeight: "600", marginBottom: "1px" }}>{label}</div>
-                        <div style={{ fontSize: "12px", color: "#4a7aaa", lineHeight: "1.5" }}>{desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ fontSize: "11px", color: "#2a4a6a" }}>Works on iPhone and iPad · Requires iOS 16.4+</div>
-              </>
-            )}
-
-            {notifState === "denied" && (
-              <>
-                <p style={{ margin: "0 0 12px", color: "#ff8080", fontSize: "13px", lineHeight: "1.6" }}>
-                  Notifications are blocked for this site. To re-enable:
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
-                  <div style={{ fontSize: "13px", color: "#7a9cc8" }}>
-                    <strong style={{ color: "#c8d4f0" }}>Chrome / Edge:</strong> Tap the 🔒 lock icon in the address bar → Site settings → Notifications → Allow
-                  </div>
-                  <div style={{ fontSize: "13px", color: "#7a9cc8" }}>
-                    <strong style={{ color: "#c8d4f0" }}>Firefox:</strong> Tap the shield icon → Connection Secure → More Information → Permissions → Notifications → Allow
-                  </div>
-                  <div style={{ fontSize: "13px", color: "#7a9cc8" }}>
-                    <strong style={{ color: "#c8d4f0" }}>Safari (Mac):</strong> Safari menu → Settings for This Website → Notifications → Allow
-                  </div>
-                </div>
-                <div style={{ fontSize: "11px", color: "#4a4a6a" }}>Then reload this page</div>
-              </>
-            )}
-
-            {notifState === "prompt" && (
-              <>
-                <p style={{ margin: "0 0 6px", color: "#4a7aaa", fontSize: "13px", lineHeight: "1.6" }}>
-                  Receive push alerts directly in your browser — no app or email needed.
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "16px" }}>
-                  {["Morning & evening race updates", "Auto-alerts when Aaron's position changes", "Milestone & checkpoint notifications"].map((item) => (
-                    <div key={item} style={{ fontSize: "12px", color: "#4a6a8a" }}>· {item}</div>
-                  ))}
-                </div>
-                <button onClick={handleEnableNotifications} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "12px 28px", fontSize: "15px", cursor: "pointer", letterSpacing: "1px", minHeight: "48px", display: "block", marginBottom: "10px" }}>
-                  Enable Notifications
-                </button>
-                <div style={{ fontSize: "11px", color: "#2a4a6a" }}>Works in Chrome, Firefox, Edge, and Safari on Mac · No sign-up required</div>
-              </>
-            )}
-
-            {notifState === "granted" && (
-              <>
-                <p style={{ margin: "0 0 6px", color: "#00c896", fontSize: "13px", lineHeight: "1.6" }}>
-                  ✓ Notifications active — you'll be alerted for updates and when Aaron moves.
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "14px" }}>
-                  {["Morning & evening race updates", "Auto-alerts when Aaron's position changes"].map((item) => (
-                    <div key={item} style={{ fontSize: "12px", color: "#2a6a4a" }}>· {item}</div>
-                  ))}
-                </div>
-                <button onClick={handleDisableNotifications} style={{ background: "none", border: "1px solid #2a4a6a", color: "#4a7aaa", borderRadius: "6px", padding: "10px 18px", fontSize: "13px", cursor: "pointer", minHeight: "44px" }}>
-                  Turn Off Notifications
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ── SUBSCRIBE ── */}
-        <div style={{ ...card, background: "linear-gradient(135deg, #0d1b3e, #0a0e1a)" }}>
-          <h2 style={{ margin: "0 0 8px", fontSize: "18px", fontWeight: "normal", color: "#fff" }}>Get Race Updates</h2>
-          <p style={{ margin: "0 0 18px", color: "#4a7aaa", fontSize: "14px", lineHeight: "1.6" }}>
-            Subscribe to receive email updates on Aaron's progress — morning check-ins, evening recaps, and alerts when he reaches key milestones.
-          </p>
-          {subStatus ? (
-            <div style={{ color: "#00c896", fontSize: "14px", lineHeight: "1.6" }}>{subStatus}</div>
-          ) : (
-            <form onSubmit={submitSubscribe} style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <input type="email" value={subEmail} onChange={(e) => setSubEmail(e.target.value)} placeholder="your@email.com" required style={{ ...inputStyle, flex: "1", minWidth: "200px" }} />
-              <button type="submit" disabled={subLoading} style={{ background: "linear-gradient(135deg, #1a5fc8, #0d3a8e)", color: "#fff", border: "none", borderRadius: "6px", padding: "10px 22px", fontSize: "13px", cursor: "pointer", letterSpacing: "1px" }}>
-                {subLoading ? "Subscribing..." : "Subscribe"}
-              </button>
-            </form>
-          )}
-        </div>
 
       </div>
 
