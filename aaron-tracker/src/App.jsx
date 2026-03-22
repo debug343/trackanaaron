@@ -1455,6 +1455,10 @@ export default function AaronTracker() {
                         </div>
                       );
                     })()}
+                    <div style={{ borderTop: "1px solid #1e2a4e", paddingTop: "12px", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+                      <span style={{ fontSize: "12px", color: "#4a6a8a" }}>Aaron ran in support of South Sudan Medical Relief</span>
+                      <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={{ background: "linear-gradient(135deg, #1a6e3a, #0d4a26)", color: "#90ffbc", textDecoration: "none", padding: "7px 16px", borderRadius: "20px", fontSize: "12px", letterSpacing: "1px", whiteSpace: "nowrap" }}>Donate to SSMR →</a>
+                    </div>
                   </>
                 )}
               </div>
