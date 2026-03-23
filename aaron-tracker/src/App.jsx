@@ -658,6 +658,8 @@ export default function AaronTracker() {
       const res = await fetch("/api/journal");
       const data = await res.json();
       setJournalEntries(data.entries || []);
+      // Re-parse Facebook embeds after entries load into the DOM
+      setTimeout(() => { try { window.FB?.XFBML?.parse(); } catch {} }, 300);
     } catch {}
     setJournalLoading(false);
   }
