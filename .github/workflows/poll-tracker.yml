@@ -1,9 +1,7 @@
 name: Poll Aaron's Tracker
 
 on:
-  schedule:
-    - cron: '*/10 * * * *'   # every 10 minutes
-  workflow_dispatch:           # manual trigger for testing
+  workflow_dispatch:           # manual trigger only — schedule disabled (race ended Mar 2026)
 
 jobs:
   poll:
